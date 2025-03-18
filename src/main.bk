@@ -1,0 +1,275 @@
+#include <Arduino.h>
+
+static unsigned long global_timer;
+
+#define BATT_PIN A1
+#define VOLT_MAX_REF 4.811   		/* Para un divisor 1M/237K */
+static char battery_voltage[5];
+
+#include <SD.h>
+#define SD_CSN 8
+char * pOffset;
+//static char buffer_file[30];
+//#define SD_DATALOG "datalog.csv"
+File data_file;
+
+/** RTC */
+#include "uRTCLib.h"
+uRTCLib rtc(0x68);
+
+/* Buffer para "dd/mm/yy,hh:mm:ss" */
+#define DATE_TIME_BUFF 18
+static char rtc_date_time[DATE_TIME_BUFF];
+
+/* Radio */
+#include <nRF24L01.h>
+#include <RF24.h>
+#include <RF24_config.h>
+#include <SPI.h>
+
+#define NFR_CE 9
+#define NRF_CSN 10
+RF24 radio(NFR_CE, NRF_CSN);
+
+/* Radio MAC id */
+static uint8_t nrf_address[] = {0xE8, 0xE8, 0xF0, 0xF0, 0xE1};
+
+#define RECV_LENGTH 18
+char radio_data[RECV_LENGTH];
+
+/* Buffer para escribir en la SD SD_BUFF RECV_LENGTH,DATE_TIME_BUFF 
+ la coma sustituye al cierre de cadena del primer buffer */
+#define SD_BUFF RECV_LENGTH + DATE_TIME_BUFF + 20
+static char sd_buffer[SD_BUFF];
+
+/* Ethernet */
+#include <EtherCard.h>
+
+#define ETHER_CSN 7
+
+static byte enc_mac_address[] = {0xDD, 0xDD, 0xDD, 0x00, 0x01, 0x05};
+
+/* Cuando la biblioteca EtherCard maneja paquetes TCP, 
+los datos recibidos y enviados comparten el mismo buffer 
+de red (Ethernet::buffer) */
+byte Ethernet::buffer[300];
+
+static byte ip_address[] = {192, 168, 1, 177};
+#define TCP_PORT 2409
+
+/* Puntero a la respuesta */
+char * request = NULL;
+char * ptr_payload = NULL;
+static uint32_t offset = 0;
+
+#define CHUNK_SIZE 128
+char chunk[CHUNK_SIZE + 1];
+uint16_t bytesToRead;
+
+/* Salvar el estado de las interrupciones */
+uint8_t csreg;
+/* Desabilitar las interrupciones */
+void inte_fall(void) {
+    csreg = SREG;
+    cli();
+}
+
+/* Habilitar las interrupciones */
+void inte_raise(void){
+    SREG = csreg;
+    sei();
+}
+
+char * time() {
+
+	rtc.refresh();
+
+	sprintf(rtc_date_time, "%02d/%02d/%02d,%02d:%02d:%02d", rtc.day(), rtc.month(), rtc.year(), rtc.hour(), rtc.minute(), rtc.second());
+	
+	Serial.println(rtc_date_time);
+
+	delay(100);
+
+	return rtc_date_time;
+
+}
+
+char * voltage(){
+
+	dtostrf(analogRead(BATT_PIN) * VOLT_MAX_REF / 1023, 4, 2, battery_voltage);
+	return battery_voltage;
+
+}
+
+void sd_record(void){
+
+	/* Esta parte es solo para debug, 
+	el delay es para que termine de 
+	imprimir sin ser interrumpido */
+	Serial.print("write: ");
+	Serial.println(sd_buffer);
+	delay(500);
+
+	//inte_fall();
+	data_file = SD.open("datalog.csv", FILE_WRITE);
+
+	delay(100);
+
+	Serial.println(data_file);
+
+	delay(100);
+
+	if(data_file){
+		data_file.println(sd_buffer);
+		data_file.close();
+	}else{
+		//inte_raise();
+		Serial.println("no write sd");
+	}
+	//inte_raise();
+
+}
+
+
+void setup() {
+
+	/* Serial */
+	Serial.begin(9600);
+
+	/* Referecia del ADC a 1.1V */
+	analogReference(INTERNAL);	
+
+	/* RTC init */
+	URTCLIB_WIRE.begin();
+
+	/* SD init */
+	if(!SD.begin(SD_CSN))
+		Serial.println("E1");
+	/* Para estabilizar la tarjeta */
+	delay(100);
+
+	/* Radio */
+	if(!radio.begin())
+		Serial.println("E2");
+
+	radio.openReadingPipe(1, nrf_address);
+	radio.startListening();
+
+	/* Ethernet init */
+	if (!ether.begin(sizeof Ethernet::buffer, enc_mac_address, ETHER_CSN))
+    	Serial.println("E3");
+
+	//Serial.println("Eth ip");	
+	if (!ether.staticSetup(ip_address))
+		Serial.println("E4");
+
+	//cambiando el puerto por defecto
+	ether.hisport = 2409;
+
+	global_timer = millis() + 5000;
+}
+
+void loop() {
+
+	/** Ejecucion de tareas de forma periodica */
+ 	if(millis() > global_timer){
+
+		global_timer = millis() + 5000; 
+
+		sprintf(sd_buffer, "NULL,NULL,NULL,NULL,%s,%s", voltage(), time());
+
+
+		Serial.print("write: ");
+		Serial.println(sd_buffer);
+
+		//sd_record();
+
+	}
+
+	/* Radio incoming */
+	if (radio.available()) {
+		/* Se lee hasta el caracter RECV_LENGTH - 1 y ... */
+		radio.read(radio_data, (RECV_LENGTH - 1)); 
+
+		/* en RECV_LENGTH se cierra la cadena al largo de los datos */
+		radio_data[RECV_LENGTH] = '\0';
+
+		/* pido la hora */
+
+		sprintf(sd_buffer, "%s,%s,%s", radio_data, voltage(), time());
+		//Serial.println(sd_buffer);
+		
+		sd_record();
+
+	}
+
+	/* Ethernet incoming */
+	uint16_t pos = ether.packetLoop(ether.packetReceive());
+
+	if (pos) {
+
+		/** Asignamos request como manejador */
+		request = (char *)Ethernet::buffer + pos;
+
+		/** y comenzamos a buscar los comandos en el payload 
+		 * 	que son GET para las solicitudes SET para el seteo 
+		 *  de parametros
+		*/
+		if(strstr(request, "GET")) {
+
+			/** Buscar el parámetro offset en la solicitud, 
+				Ejemplo de solicitud: "GET offset=1024" */
+			ptr_payload = strstr(request, "offset=");
+			if (ptr_payload) {
+				offset = atol(ptr_payload + 7);  // +7 para saltar "offset="
+			  
+				/** Abrir el archivo */
+				data_file = SD.open("datalog.csv", FILE_READ);
+
+				//Serial.println(offset);
+				Serial.println(data_file);
+				Serial.println(data_file.size());
+
+				if (data_file) {
+				  // Posicionarse en el offset
+				  if (offset < data_file.size()) {
+					data_file.seek(offset);
+
+					Serial.println("seek");
+		
+					/** Leer un bloque hasta CHUNK_SIZE bytes o en su defecto
+						hasta que se acabe el archivo. */
+					bytesToRead = min((CHUNK_SIZE - 1), (uint16_t)(data_file.size() - offset));
+					data_file.readBytes(chunk, (bytesToRead));
+					bytesToRead ++;
+					chunk[bytesToRead] = '\0';  // Terminar cadena
+		
+				  data_file.close();
+		
+				  } else {
+					// Si el offset es mayor que el tamaño, no hay datos nuevos
+					// offset = data_file.size();
+					sprintf(chunk, "%s", "no new data available");
+				  }
+				  
+				} else {
+				  // Responder error si no se puede leer el archivo
+				  sprintf(chunk, "%s", "Error: No se pudo leer la SD");
+				}
+		
+				Serial.println(chunk);
+		
+				// Construir respuesta (puedes incluir el offset final en la respuesta)
+				BufferFiller bfill = ether.tcpOffset();
+				bfill.emit_p(PSTR("chunk=$S"), chunk);
+				ether.httpServerReply(bfill.position());
+			
+			}
+
+
+		}
+	
+	}
+
+}
+

@@ -1,0 +1,307 @@
+#include <Arduino.h>
+
+static uint16_t g_timer;
+
+#define BATT_PIN A1
+#define VOLT_MAX_REF 5.615   		/* Para un divisor 1M/237K */
+
+#include <SD.h>
+#define SD_CSN 8
+static char buffer_file[30];
+
+/** RTC */
+#include "uRTCLib.h"
+uRTCLib rtc(0x68);
+
+char rtc_date[8];
+char rtc_time[8];
+
+/* Radio */
+#include <nRF24L01.h>
+#include <RF24.h>
+#include <RF24_config.h>
+#include <SPI.h>
+
+#define NFR_CE 9
+#define NRF_CSN 10
+RF24 radio(NFR_CE, NRF_CSN);
+
+/* Radio MAC id */
+static uint8_t nrf_address[] = {0xE8, 0xE8, 0xF0, 0xF0, 0xE1};
+
+#define RECV_eth_pkg_LENGTH 18
+char radio_data[RECV_eth_pkg_LENGTH];
+
+/* Ethernet */
+#include <EtherCard.h>
+
+#define ETHER_CSN 7
+
+static byte enc_mac_address[] = {0xDD, 0xDD, 0xDD, 0x00, 0x01, 0x05};
+
+/* Cuando la biblioteca EtherCard maneja paquetes TCP, 
+los datos recibidos y enviados comparten el mismo buffer 
+de red (Ethernet::buffer) */
+byte Ethernet::buffer[300];
+
+static byte ip_address[] = {192, 168, 1, 177};
+#define TCP_PORT 2409
+
+static byte remote_ip_address[] = {192, 168, 1, 178};
+
+// Estructura para comandos
+struct Command {
+	const char* name;
+	void (*callback)(const char* args); // Función asociada
+};
+
+// Funciones de los comandos
+
+void time(const char *args) {
+
+	rtc.refresh();
+
+	//Serial.print("RTC DateTime: ");
+	sprintf(rtc_date, "%d/%d/%d", rtc.day(), rtc.month(), rtc.year());
+	Serial.print(rtc_date);
+	Serial.print(',');
+	sprintf(rtc_time, "%d:%d:%d", rtc.hour(), rtc.minute(), rtc.second());
+	Serial.print(rtc_time);
+
+	Serial.println();
+}
+
+/** 
+ * @param buffer aqui se escribe lo que se va a leer del archivo
+ * @param file_name es el nombre del archivo
+ * @return 0 cuando no se pudo acceder al archivo o no hay nada
+ *			la cantidad de bytes leidos y puestos en el buffer
+ */
+uint8_t read_sd(char * buffer, const char * file_name) {
+
+	/* Verificanto que el fichero exista */
+	if(!SD.exists(file_name)) {
+		Serial.println("no file");
+		return 0;
+	}
+	
+	/* abrir el archivo para lectura */
+	File data_file = SD.open(file_name, FILE_READ);
+
+	if(!data_file) 
+		return(0);
+
+	/* Contador que recorrera el archivo */
+	uint16_t i = 0;
+
+	/* Leer el archivo byte a byte */
+	while(data_file.available() && i < sizeof(buffer)) {
+		buffer[i] = data_file.read();
+		i ++;
+	}
+
+	Serial.println(i);
+
+	/* cerrar el archivo */
+	data_file.close();
+
+	/* retornamos el largo de la cadena leida */
+	return(i);
+}
+
+void read_cmd(const char *args){
+
+	Serial.println("sd: ");
+
+	if(read_sd(buffer_file, "datalog.txt")){
+		Serial.println(buffer_file);
+	} else {
+		Serial.println("no file");
+	}
+
+}
+
+void write_cmd(const char *args){
+
+	File data_file = SD.open("datalog.txt");
+
+	//...
+
+	data_file.close();
+}
+
+double battery_voltage(){
+	return (double (BATT_PIN) * VOLT_MAX_REF / 1023);
+}
+
+void batt(const char *args){
+	Serial.print("Batt: ");
+	Serial.println(battery_voltage());
+}
+
+/**	Este es el callback que se llama cuando se le hace un 
+	un ping a la interface 
+*/
+/* static void got_pinged (byte* ptr) {
+	ether.printIp(">>> ping from: ", ptr);
+} */
+
+void ping(const char *args){
+
+	ether.printIp("ping to: ", remote_ip_address);
+
+	ether.clientIcmpRequest(remote_ip_address);
+
+	Serial.println("... ping");
+
+}
+
+void help(const char* args);
+
+// Lista de comandos disponibles
+Command commands[] = {
+	{"time", time},
+	{"read", read_cmd},
+	{"write", write_cmd},
+	{"batt", batt},
+	{"ping", ping},
+	{"help", help},
+};
+
+const int numCommands = sizeof(commands) / sizeof(commands[0]);
+
+void help(const char* args) {
+	Serial.println("cmd ");
+	for (int i = 0; i < numCommands; i++) {
+		Serial.println(commands[i].name);
+	}
+}
+
+// Función para procesar comandos
+void processCommand(const char* input) {
+	for (int i = 0; i < numCommands; i++) {
+		if (strcmp(input, commands[i].name) == 0) {
+			commands[i].callback(nullptr); // Ejecutar callback
+			return;
+		}
+	}
+	Serial.println("bad cmd");
+}
+
+void setup() {
+
+	/* Init g_timer */
+	g_timer = millis() + 2000;
+
+	/* Serial */
+	Serial.begin(9600);
+
+	/* Referecia del ADC a 1.1V */
+	analogReference(INTERNAL);	
+
+	/* RTC init */
+	URTCLIB_WIRE.begin();
+
+	//Serial.println("card");
+
+	/* SD init */
+	if(!SD.begin(SD_CSN))
+		Serial.println('1');
+
+	//Serial.println("radio");
+
+	/* Radio */
+	if(!radio.begin())
+		Serial.println('2');
+
+	radio.openReadingPipe(1, nrf_address);
+	radio.startListening();
+
+	/* Ethernet init */
+ 	//Serial.println("Eth mac");
+	if (!ether.begin(sizeof Ethernet::buffer, enc_mac_address, ETHER_CSN))
+    	Serial.println('3');
+
+	//Serial.println("Eth ip");	
+	if (!ether.staticSetup(ip_address))
+		Serial.println('4');
+
+	//call this to report others pinging us
+	//ether.registerPingCallback(got_pinged);
+	//cambiando el puerto por defecto
+	ether.hisport = 2409;
+
+	Serial.print('>');
+
+}
+
+void loop() {
+
+/* 	if(millis() < g_timer){
+
+		g_timer = millis() + 1000;
+
+	} */
+
+	/* Ethernet incoming */
+	uint16_t pos = ether.packetLoop(ether.packetReceive());
+
+	if (pos) {
+        //bfill = ether.tcpOffset();
+        char* data = (char *) Ethernet::buffer + pos;
+		
+		Serial.println(data);
+
+        // Obtener la posición en el buffer donde podemos escribir la respuesta
+        BufferFiller bfill = ether.tcpOffset();
+        
+        // Escribir respuesta en el buffer
+        bfill.emit_p(PSTR("Hola Cliente"));
+
+        // Enviar respuesta TCP y cierra la conexion
+        ether.httpServerReply(bfill.position());
+
+	}
+
+
+	/* Radio incoming */
+	if (radio.available()) {
+		radio.read(radio_data, sizeof radio_data); 
+		Serial.println(radio_data);
+		
+/* 		File data_file = SD.open("datalog.txt", FILE_WRITE);
+		if(data_file){
+			data_file.println(radio_data);
+			data_file.close();
+		} else {
+			Serial.println('5');
+		} */
+
+	}
+
+	/* Serial (Comand) incoming */
+	static char inputBuffer[50];  // Buffer para el comando
+	static uint16_t inputPos = 0;  
+
+	while (Serial.available()) {
+		
+		/* read and ecco */
+		char c = Serial.read();
+		Serial.print(c);
+
+		if (c == '\n' || c == '\r') {  // Si se presiona Enter
+			if (inputPos > 0) {  // Si hay algo escrito
+				inputBuffer[inputPos] = '\0';  // Terminar string
+				processCommand(inputBuffer);  // Procesar comando
+				inputPos = 0;  // Reiniciar buffer
+			}
+		} else if (inputPos < sizeof(inputBuffer) - 1) {
+			inputBuffer[inputPos++] = c;  // Agregar caracter al buffer
+		}
+	}
+	
+
+
+
+}
+

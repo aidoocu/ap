@@ -1,0 +1,105 @@
+/** 
+ * 
+ * 
+ * 
+ * 
+ */
+
+#include "eth.h"
+#include <Arduino.h>
+#include <SPI.h>
+
+#define SPI_SPEED 2000000  // 2 MHz
+
+//static uint8_t enc_mac_address[] = {0xDD, 0xDD, 0xDD, 0x00, 0x01, 0x05};
+//static uint8_t ip_address[] = {192, 168, 1, 177};
+
+
+byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+IPAddress ip(192, 168, 1, 177);
+//IPAddress gateway(192, 168, 1, 1);
+//IPAddress subnet(255, 255, 255, 0);
+
+EthernetServer server(TCP_PORT);
+
+
+
+/* Cuando la biblioteca EtherCard maneja paquetes TCP, 
+los datos recibidos y enviados comparten el mismo buffer 
+de red (Ethernet::buffer) */
+//extern uint8_t Ethernet::buffer[ETH_BUFF];
+
+void eth_init(void){
+
+	// Inicializar Ethernet
+	Ethernet.init(ETHER_CSN);  // Asignar pin CS
+	Ethernet.begin(mac, ip);
+	
+	// Asignar IP estática (opcional)
+	//Ethernet.localIP(ip);
+	//Ethernet.setSubnetMask(subnet);
+	//Ethernet.setGateway(gateway);
+
+	//SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
+ 
+	/* Ethernet init */
+	//if (!ether.begin(sizeof Ethernet::buffer, enc_mac_address, ETHER_CSN))
+	//    Serial.println("E3");
+
+	//if (!ether.staticSetup(ip_address))
+	//    Serial.println("E4");
+
+	//cambiando el puerto por defecto
+	//ether.hisport = TCP_PORT;
+
+	//SPI.endTransaction();
+
+}
+
+uint16_t eth_check(char ** request){
+
+	SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
+
+	/* Esta funcion devuelve la cantidad de bytes recibidos... */
+	uint16_t received = ether.packetReceive();
+
+	SPI.endTransaction();
+	
+	/* ... entonces, de haber recibirdo algo */
+	if(received) {
+
+		/*  pos es el offset despues del encabezado TPC, si pos es 0
+			implica que si se recibio algo pero la biblioteca lidio
+			con eso de forma automatica, por ejemplo con un ping */
+		uint16_t pos = ether.packetLoop(received);
+
+		if (pos) {
+
+
+			/** Asignamos request como manejador apuntando al principo 
+			 *  del payload y le pasamos su direccion
+			 */
+			* request = (char * )Ethernet::buffer + pos;
+
+			/* y devolvemos el largo del payload */
+			return received - pos;
+	
+		}
+ 
+	}
+	
+	/*  En cualquier otro caso se retorna 0, sea porque no se ha recibido nada
+		o porque huvo una respuesta automatica */
+	return 0;
+}
+
+void eth_send(char * send_buffer) {
+
+	SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
+
+	BufferFiller bfill = ether.tcpOffset();
+	bfill.emit_p(PSTR("$S"), send_buffer);
+	ether.httpServerReply(bfill.position());
+
+	SPI.endTransaction();
+}
