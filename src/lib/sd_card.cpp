@@ -27,8 +27,6 @@ void sd_init(){
 	/* if(!SD.begin(SPI_FULL_SPEED, SD_CSN)) */
 	if(!sd_card.begin(SD_CSN, SD_SCK_MHZ(4)))
 		Serial.println("E1");
-
-	//SPI.endTransaction();
 	
 	/* Para estabilizar la tarjeta */
 	delay(100);
@@ -38,26 +36,27 @@ void sd_init(){
 
 
 uint32_t sd_file_size(void){
-
-	//delay(10);
 	
 	if(sd_file.open(SD_DATALOG, O_RDONLY)) {
 
 		uint32_t file_size = sd_file.fileSize();
-
 		sd_file.close();
-
 		return file_size;
 
 	}
-
+	
 	return 0;
-
 }
 
 uint32_t sd_record(char * sd_buffer){
 
+	Serial.println('O');
+	delay(10);
+
 	if(sd_file.open(SD_DATALOG, O_RDWR)){
+
+		Serial.println('-');
+		delay(10);
 
 		/* Ponerse al final del archivo */
 		sd_file.seekEnd();
@@ -67,6 +66,10 @@ uint32_t sd_record(char * sd_buffer){
 		return printed;
 
 	}
+
+	Serial.println('P');
+	delay(10);
+
 	return 0;
 
 }
