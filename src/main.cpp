@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <stdlib.h>
 #include <SPI.h>
+#include <avr/wdt.h>
 
 #include "lib/ap_config.h"
 
@@ -53,17 +54,24 @@ void update_sd(void) {
 	/* dd/mm/aa,hh:mm:ss,v.mv,id,tt.t,hh,v.mv,v.mv - (43 + 1 '\0') */
 	sprintf(data_buffer, "%s,%s,%s", rtc_date_time, battery_voltage, store_to_sd);
 
-	Serial.print("record: ");
+/* 	Serial.print("record: ");
 	Serial.println(data_buffer);
-	delay(20);
+	delay(20); */
 
-	uint32_t data_lenght_recorded = sd_record(data_buffer);
+	/* 	Si la operacion en la memoria no es exitosa cae en un lazo infinito hasta que
+		el micro se reinicia por WDT */
+	if(!sd_record(data_buffer))
+		while(1){}
 	
+	/* No esta de mas resetear el WDT */
+	wdt_reset();
+
 	/* Debug */
-	Serial.print(data_lenght_recorded);
+/*	//uint32_t data_lenght_recorded = sd_record(data_buffer);
+ 	Serial.print(data_lenght_recorded);
 	Serial.print(" - ");
 	Serial.println(sd_file_size());
-	delay(20);
+	delay(20); */
 
 }
 
@@ -91,14 +99,21 @@ void setup(){
 
 	global_timer = millis() + 5000;
 
+	/* habilitando el WDT */
+	wdt_enable(WDTO_2S);
+
 }
 
 void loop() {
 
 	//eth_update_cnx();
+	
+	/* Resetear el WDT */
+	wdt_reset();
 
 	/* Chequea la radio y actualiza en la SD si hay algo nuevo */
   	if (nrf_check(data_buffer)) {
+
 		update_sd();
 	}
 
