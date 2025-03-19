@@ -50,13 +50,7 @@ uint32_t sd_file_size(void){
 
 uint32_t sd_record(char * sd_buffer){
 
-	Serial.println('O');
-	delay(10);
-
 	if(sd_file.open(SD_DATALOG, O_RDWR)){
-
-		Serial.println('-');
-		delay(10);
 
 		/* Ponerse al final del archivo */
 		sd_file.seekEnd();
@@ -66,9 +60,6 @@ uint32_t sd_record(char * sd_buffer){
 		return printed;
 
 	}
-
-	Serial.println('P');
-	delay(10);
 
 	return 0;
 
