@@ -35,7 +35,7 @@ void update_sd(void) {
 
 	/* Get data */
 	char rtc_date_time[DATE_TIME_BUFF];
-	time(rtc_date_time); //time;
+	get_time(rtc_date_time); //time;
 	
 	char battery_voltage[5];
 	dtostrf(analogRead(BATT_PIN) * VOLT_MAX_REF / 1023, 4, 2, battery_voltage); //voltage
@@ -47,27 +47,24 @@ void update_sd(void) {
 	if (data_buffer[0] == '\0') {
 		store_to_sd = local_block;
 	} else {
-		sprintf(received_buffer, "%s", data_buffer);
+		sprintf(store_to_sd, "%s", data_buffer);
 	}
 
-	/* dd/mm/aa,hh:mm:ss,v.mv,id,tt.t,hh,v.mv,v.mv - (43) */
+	/* dd/mm/aa,hh:mm:ss,v.mv,id,tt.t,hh,v.mv,v.mv - (43 + 1 '\0') */
 	sprintf(data_buffer, "%s,%s,%s", rtc_date_time, battery_voltage, store_to_sd);
 
 	Serial.print("record: ");
 	Serial.println(data_buffer);
 	delay(20);
 
-	//sd_record(data_buffer);
+	uint32_t data_lenght_recorded = sd_record(data_buffer);
 	
 	/* Debug */
-/* 	Serial.print(sd_record(data_buffer));
+	Serial.print(data_lenght_recorded);
 	Serial.print(" - ");
 	Serial.println(sd_file_size());
-	delay(10); */
+	delay(20);
 
-	Serial.println(sd_record(data_buffer));
-
-	delay(10);
 }
 
 
@@ -101,15 +98,26 @@ void loop() {
 	//eth_update_cnx();
 
 	/* Chequea la radio y actualiza en la SD si hay algo nuevo */
-  	if (/* nrf_check(data_buffer) */ (millis() + 10) > global_timer){
-		Serial.println("u");
-		nrf_check(data_buffer);
-		//Serial.println(data_buffer);
+  	if (nrf_check(data_buffer)) {
 		update_sd();
-		delay(10);
+	}
+
+	/** Ejecucion de tareas de forma periodica */
+	if(millis() > global_timer){
+
+								  /* 5 min */ /* 5 seg */
+		global_timer = millis() + 600000 /* 5000 */;
+
+		/* 	Sennalamos que el buffer esta vacio para que no lo 
+		procese update_sd(); */
+		data_buffer[0] = '\0';
+
+		/* y actualizamos la SD */
+		update_sd();
+
 	}
 	
-	if (0/* eth_check(data_buffer) */ /*  millis() > global_timer */) {
+	if (/* eth_check(data_buffer) */ 0) {
 
 		//Serial.println(data_buffer);
 		//delay(20);
@@ -207,38 +215,26 @@ void loop() {
 				}
 
 			} /* Campo offset */
-
-			/* Debug */
-			//Serial.println(data_buffer);
-			//delay(50);
-
-			/* Sending to ethernet */
-			eth_send(data_buffer);		
 		
 		} /* Campo GET */
-		if(strstr(data_buffer, "SET")){
+		else if(strstr(data_buffer, "SET date_time=")){ /* Campo SET */
 
-			//
+			//Serial.print("S: ");
+			//set_date_time(&data_buffer[14]);
+			data_buffer[0] = '\0';
+
+		}
+		/* Si se recibio algo que no se esperaba, la cadena se daclara vacia */
+		else {
+			data_buffer[0] = '\0';
 		}
 
+		Serial.println(data_buffer);
+		delay(50);
+
+		/* Sending to ethernet */
+		eth_send(data_buffer);	
+
 	} /* Algo se recibio */
-
-	/** Ejecucion de tareas de forma periodica */
- 	if(millis() > global_timer){
-
-		Serial.println("d");
-									/* 5 min */
-		global_timer = millis() + /* 300000 */ 5000;
-
-		/* 	Sennalamos que el buffer esta vacio para que no lo 
-			procese update_sd(); */
-		data_buffer[0] = '\0';
-
-		delay(10);
-
-		/* y actualizamos la SD */
-		//update_sd();
-
-	}
 
 }

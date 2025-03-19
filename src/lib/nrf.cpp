@@ -27,19 +27,17 @@ void nrf_init(void) {
 
 bool nrf_check(char * request) {
 
-    if (/* nrf_radio.available() */1) {
-
-        Serial.println('R');
-        delay(5);
+    if (nrf_radio.available()) {
 
 		/* Se lee hasta el caracter RECV_LENGTH y ... */
-		//nrf_radio.read(request, RECV_LENGTH);
+		nrf_radio.read(request, RECV_LENGTH);
         
-        char request_buf[] = {"MR,28.1,67,3.22,1.76"};
-        sprintf(request, "%s", request_buf);
+        /* Debug */
+        //char request_buf[] = {"MR,28.1,67,3.22,1.76"};
+        //sprintf(request, "%s", request_buf);
 
 		/* en RECV_LENGTH se cierra la cadena al largo de los datos */
-		//request[RECV_LENGTH - 1] = '\0';
+		request[RECV_LENGTH - 1] = '\0';
 
         /** @note En realidad el '\0' debe venir en el caracter RECV_LENGTH, 
          * pero por seguridad se fuerza el cierre de la cadena
