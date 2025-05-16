@@ -27,6 +27,19 @@
 */
 void get_time(char * time);
 
-#endif /* _RTC_H_ */
 
-void set_date_time(char * date_time);
+/**  
+ * Esta funcion valida la cadena de fecha y hora
+ * en el formato dd/mm/aa,hh:mm:ss
+ * 
+ * Devuelve true si es correcta, false si no lo es
+ */
+bool validate_date_time(const char* date_time);
+
+/** Esta funcion setea la fecha y hora */
+bool set_date_time(char * date_time);
+
+
+
+
+#endif /* _RTC_H_ */

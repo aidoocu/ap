@@ -19,8 +19,8 @@
 #include <RF24_config.h>
 #include <SPI.h>
 
-#define NFR_CE 9
-#define NRF_CSN 10
+#define NFR_CE D3
+#define NRF_CSN D4
 
 void nrf_init(void);
 

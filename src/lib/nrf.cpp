@@ -18,7 +18,9 @@ static RF24 nrf_radio(NFR_CE, NRF_CSN);
 void nrf_init(void) {
     
     if(!nrf_radio.begin())
-        Serial.println('2');
+        Serial.println("NRF radio error");
+    else
+        Serial.println("NRF radio ok");
 
     nrf_radio.openReadingPipe(1, nrf_address);
     nrf_radio.startListening();

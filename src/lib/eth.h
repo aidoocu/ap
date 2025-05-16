@@ -7,7 +7,7 @@
  */
 
 #ifndef _ETH_H_
-#define _ ETH_H_
+#define _ETH_H_
 
 
 #include <Arduino.h>
@@ -18,7 +18,7 @@ en uipethernet-conf.h */
 #include "eth_enc/EthernetENC.h"
 #include "eth_enc/EthernetUdp.h"
 
-#define ETHER_CSN 7
+#define ETHER_CSN D0
 
 #define TCP_PORT 2409
 
