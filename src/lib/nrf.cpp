@@ -44,8 +44,6 @@ bool nrf_check(char * request) {
         /** @note En realidad el '\0' debe venir en el caracter RECV_LENGTH, 
          * pero por seguridad se fuerza el cierre de la cadena
          */
-        //Serial.println(request);
-        //delay(20);
 
         return true;
     }

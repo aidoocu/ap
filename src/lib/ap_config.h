@@ -31,7 +31,7 @@
 /** Batt volt */
 #define BATT_PIN A0
 //#define BATT_PIN A1
-#define VOLT_MAX_REF 5.635   		/* Para un divisor 1M/240K */
+#define VOLT_MAX_REF 24.28   		/* Para un divisor 1M/240K, teniendo en cuenta que ya el Wemos tiene un divisor 220 kΩ/100 kΩ */
 
 /* Mensajes */
 #define ACK_OK_RESP         "ACK=200 pl="   //Recurso encontrado, a continuacion viene la respuesta

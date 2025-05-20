@@ -12,7 +12,6 @@
 
 #include "lib/ap_config.h"
 
-static uint16_t data_buffer_size = 0;
 static char data_buffer[BUFFER_SIZE];
 static char * payload_progress;		//Valorar si es necesario que sea char o se puede poner uint8_t
 static unsigned long global_timer;
@@ -43,7 +42,7 @@ uint32_t str_to_int(char * str_offset) {
 
 }
 
-void update_sd(void) {
+bool update_sd(void) {
 
 	/* Get data */
 	char rtc_date_time[DATE_TIME_BUFF];
@@ -56,10 +55,19 @@ void update_sd(void) {
 	char received_buffer[RECV_LENGTH];
 	char * store_to_sd = received_buffer;
 
+	/* 	Si el buffer es vacio significa que no hay nada para procesar, 
+		entonces se guarda el bloque local */
 	if (data_buffer[0] == '\0') {
 		store_to_sd = local_block;
+	/* Si no esta vacio hay que guardar su contenido en la memoria */
 	} else {
-		sprintf(data_buffer, "%s", store_to_sd);
+		/* Si el buffer es mayor a 21 bytes, significa que hay un problema con el payload */
+		/* !!!!! En este caso hay que hacer una verificacion del payload completo antes de guardarlo */
+		if(strlen(data_buffer) > 21)
+			return false;
+
+		sprintf(store_to_sd, "%s", data_buffer);
+
 	}
 
 	/* dd/mm/aa,hh:mm:ss,v.mv,id,tt.t,hh,v.mv,v.mv - (43 + 1 '\0') */
@@ -72,11 +80,7 @@ void update_sd(void) {
 	/* 	Si la operacion en la memoria no es exitosa cae en un lazo infinito hasta que
 		el micro se reinicia por WDT */
  	if(!sd_record(data_buffer)) {
-
-		/* 	Si la operacion en la memoria no es exitosa hay que reportarlo al 
-		servidor de alguna manera */
-		
-
+		return false;
 	}
 	
 	/* No esta de mas resetear el WDT */
@@ -88,6 +92,8 @@ void update_sd(void) {
 	Serial.print(" - ");
 	Serial.println(sd_file_size());
 	delay(10);
+
+	return true;
 
 }
 
@@ -153,7 +159,7 @@ void loop() {
 	if(millis() > global_timer){
 
 								  
-		global_timer = millis() + /* GLOBAL_PERIOD */ 20000;
+		global_timer = millis() + GLOBAL_PERIOD;
 
 		/* 	Sennalamos que el buffer esta vacio para que no lo 
 		procese update_sd(); */
@@ -163,15 +169,9 @@ void loop() {
 		update_sd();
 
 	}
-
-
-	data_buffer_size = eth_check(data_buffer);
-
 	
-	if (data_buffer_size) {
+	if (eth_check(data_buffer)) {
 
-		//Serial.println(data_buffer);
-		//delay(20);
 
 		/** y comenzamos a buscar los comandos en el payload 
 		 * 	que son GET para las solicitudes SET para el seteo 
@@ -181,15 +181,9 @@ void loop() {
 		/* Campo GET */
 		if(strstr(data_buffer, "GET")){
 
-			//Serial.println(data_buffer);
-			//delay(50);
-
 			/** Buscar el parámetro offset en la solicitud, 
 			Ejemplo de solicitud: "GET offset=1024" */
 			payload_progress = strstr(data_buffer, "offset=");
-
-			//Serial.println(payload_progress);
-			//delay(20);
 
 			/* Si no hay un campo "offset=", como se llego aqui desde un GET */
 			if (!payload_progress) {
@@ -220,10 +214,6 @@ void loop() {
 						en la SD para hacer las comparaciones */
 					uint32_t file_size = sd_file_size();
 
-					//Serial.print("s: ");
-					//Serial.println(file_size);
-					//delay(20);
-		
 					/* 	Si file_size es 0 puede ser o que hay un error al abrir el archivo o esta esta 
 						completamente en blanco. El segundo caso no es un error en si mismo, aunque implica
 						nada que enviar de respuesta. Aun asi se enviara un error de servidor */
@@ -253,18 +243,10 @@ void loop() {
 						sprintf(data_buffer, ACK_OK_RESP);
 						payload_progress = &data_buffer[0] + HEADER_OK_RESP_LENGTH; // descontamos el cierre de cadena
 
-						//Serial.println(data_buffer);
-						//delay(20);
-
 						/* Se lee el archivo desde el offset  */
 						bytes_readed = sd_read((uint8_t *)(payload_progress), (MAX_SD_READ_CHUNK), eth_offset, file_size);
 						/* Poner el cierre de cadena */
 						payload_progress[bytes_readed] = '\0';
-
-						/* Serial.print(bytes_readed);
-						Serial.print(" - ");
-						Serial.println(data_buffer);
-						delay(50); */
 
 						/* Si sd_read devuelve un 0 es que no se pudo leer el archivo asi que chunk se reescribe */
 						if(!bytes_readed)
@@ -294,9 +276,6 @@ void loop() {
 					SET date_time=05,09,11,6,16,05,25 */				
 				char * rtc_date_time = &data_buffer[14];
 
-				/* 	hay que validar la cadena */
-
-
 				/* Se setea la nueva fecha_hora */
 				if (set_date_time(rtc_date_time)) {
 
@@ -313,21 +292,14 @@ void loop() {
 
 					/* No se pudo setear la fecha y hora */
 					sprintf(data_buffer, ACK_BAD_DATETIME);
-
 				}
 				
-
-
-
-
 			} else {
 
 				/* No hay un campo valido dentro del "SET" */
 				sprintf(data_buffer, ACK_ERR_NO_SET );
 
 			}
-
-
 
 		} /* Campo SET */
 

@@ -24,6 +24,9 @@ de red (Ethernet::buffer) */
 void eth_init(void){
 
 	byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+	//10.252.0.132
+	//IPAddress local_ip(10, 252, 0, 241);
+	//10.1.111.241
 	IPAddress local_ip(10, 1, 111, 241);
 	//IPAddress dns(10, 16, 1, 3); //defaults to the device IP address with the last octet set to 1
 	//IPAddress gateway(10, 16, 22, 1); //defaults to the device IP address with the last octet set to 1
