@@ -91,7 +91,7 @@ uint16_t eth_check(char * request){
 
 }
 
-void eth_send(char * send_buffer) {
+void eth_response(char * send_buffer) {
 
 	/* envio la cadena incluyendo el cierre de cadena (+ 1) */
 	client.write(send_buffer, strlen(send_buffer) + 1);
@@ -99,3 +99,5 @@ void eth_send(char * send_buffer) {
 	client.stop();
 
 }
+
+

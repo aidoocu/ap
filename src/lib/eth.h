@@ -39,8 +39,8 @@ void eth_update_cnx(void);
  */
 uint16_t eth_check(char * request);
 
-
-
 void eth_send(char * send_buffer);
+
+void eth_response(char * send_buffer);
 
 #endif /* ETH_H_ */

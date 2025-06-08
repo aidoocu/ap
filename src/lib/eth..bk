@@ -93,7 +93,7 @@ uint16_t eth_check(char ** request){
 	return 0;
 }
 
-void eth_send(char * send_buffer) {
+void eth_response(char * send_buffer) {
 
 	SPI.beginTransaction(SPISettings(SPI_SPEED, MSBFIRST, SPI_MODE0));
 
