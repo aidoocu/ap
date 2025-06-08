@@ -149,12 +149,7 @@ void loop() {
 	
 	/* Resetear el WDT */
 	wdt_reset();
-
-	/* Chequea la radio y actualiza en la SD si hay algo nuevo */
-  	if (nrf_check(data_buffer)) {
-		update_sd();
-	}
-
+	
 	/** Ejecucion de tareas de forma periodica */
 	if(millis() > global_timer){
 
@@ -169,7 +164,13 @@ void loop() {
 		update_sd();
 
 	}
-	
+
+	/* Chequea la radio y actualiza en la SD si hay algo nuevo */
+  	if (nrf_check(data_buffer)) {
+		update_sd();
+	}
+
+	/* Verificamos si hay datos nuevos en la conexión Ethernet */
 	if (eth_check(data_buffer)) {
 
 
