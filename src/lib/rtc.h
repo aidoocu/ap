@@ -19,24 +19,24 @@
 #endif /* RTC_DEV == RTC_DEV_DEFAULT */
 
 
-/** Esta funcion escribe la cadena en formato UTC ISO 8601: yyyy-mm-ddThh:mm:ssZ
-*  a partir time. Esta funcion NO chequea el largo 
-*  del buffer, por lo que al ser llamada hay que asegurarse
-*  que el buffer apuntado por time sea no menos que 
-*  DATE_TIME_BUFF (definido en ap_config.h)
+/** Esta funcion escribe la cadena en formato ISO 8601: yyyy-mm-ddThh:mm:ssZ o yyyy-mm-ddThh:mm:ss±hh:mm
+*  a partir de la hora UTC almacenada en el RTC y un offset opcional.
+*  El buffer debe tener al menos DATE_TIME_BUFF caracteres.
+*  Si no se especifica offset, devuelve en UTC (Z).
 */
-void get_time(char * time);
+void get_time(char * time, int tz_offset_minutes = 0);
 
-
-/**  
+/**
  * Esta funcion valida la cadena de fecha y hora
- * en el formato ISO 8601 UTC: yyyy-mm-ddThh:mm:ssZ
- * 
+ * en el formato ISO 8601: yyyy-mm-ddThh:mm:ssZ o yyyy-mm-ddThh:mm:ss±hh:mm
  * Devuelve true si es correcta, false si no lo es
  */
 bool validate_date_time(const char* date_time);
 
-/** Esta funcion setea la fecha y hora */
+/**
+ * Esta funcion setea la fecha y hora en el RTC a partir de una cadena ISO 8601 UTC o con offset.
+ * Convierte la hora local+offset a UTC antes de guardar en el RTC.
+ */
 bool set_date_time(char * date_time);
 
 
