@@ -14,16 +14,16 @@
 
 
 /* Tamano de los datos a guardar en cada  linea */
-/* dd/mm/aa,hh:mm:ss */
-#define DATE_TIME_BUFF 18
+/* yyyy-mm-ddThh:mm:ssZ */
+#define DATE_TIME_BUFF 21
 /* id,tt.t,hh,v.mv,v.mv  -> temperatura,  humedad, volt sc, volt pv */
 #define RECV_LENGTH 21
 /* v.mv */
 #define VOLT_AP_VATT 4
 /* id -> node id */
 #define NODE_ID 2
-/* dd/mm/aa,hh:mm:ss,v.mv,id,tt.t,hh,v.mv,v.mv - (43) */
-#define FULL_LINE_BUFF DATE_TIME_BUFF + VOLT_AP_VATT + NODE_ID + RECV_LENGTH
+/* yyyy-mm-ddThh:mm:ssZ,v.mv,id,tt.t,hh,v.mv,v.mv - (46) */
+#define FULL_LINE_BUFF DATE_TIME_BUFF + VOLT_AP_VATT + NODE_ID + RECV_LENGTH  // = 21 + 4 + 2 + 21 = 48
 
 /* Archivo donde se guardan los datos */
 #define SD_DATALOG "datalog.csv"
@@ -51,5 +51,8 @@
 #define HEADER_OK_RESP_LENGTH (sizeof(ACK_OK_RESP) - 1) //Aqui el lee tambien el '\0' entonces -1
 /* Pedazo maximo de memoria que se puede leer desde la SD para no devordar el buffer */
 #define MAX_SD_READ_CHUNK BUFFER_SIZE - HEADER_OK_RESP_LENGTH - 1 //hay que dejar un caracter para el cierre de cadena
+
+/* Timeout para esperar la respuesta del servidor */
+#define REQUEST_TIMEOUT 5000 //5 segundos
 
 #endif /* _AP_CONFIG_H_ */

@@ -39,8 +39,13 @@ void eth_update_cnx(void);
  */
 uint16_t eth_check(char * request);
 
-void eth_send(char * send_buffer);
-
+/* As server */
 void eth_response(char * send_buffer);
+
+/* As client */
+bool eth_request_connect(void);
+bool eth_server_income(char * response_buffer);
+void eth_send(char * send_buffer, size_t length = 0);
+void eth_disconnect(void);
 
 #endif /* ETH_H_ */

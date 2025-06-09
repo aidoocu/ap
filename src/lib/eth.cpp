@@ -10,10 +10,16 @@
 #include <SPI.h>
 
 
-
+/* Servicio donde el AP escucha */
 static EthernetServer tcp_server = EthernetServer(TCP_PORT);
-
+/* Clientes del AP */
 static EthernetClient client;
+/* Servidor al que se conecta el AP */
+static EthernetClient server;
+/* Direccion IP del servidor al que se conecta el AP */
+static IPAddress server_ip(10, 1, 111, 249); // Cambiar a la IP del servidor
+/* Puerto del servidor al que se conecta el AP */
+#define SERVER_PORT 8000 // Cambiar al puerto del servidor
 
 
 /* Cuando la biblioteca EtherCard maneja paquetes TCP, 
@@ -100,4 +106,37 @@ void eth_response(char * send_buffer) {
 
 }
 
+/* Intentar conectar al servidor */
+bool eth_request_connect(void) {
 
+	if (server.connect(server_ip, SERVER_PORT))
+		return true;
+	return false;
+}
+
+/* Envio de datos al servidor previamente conectado */
+void eth_send(char * send_buffer, size_t length) {
+
+	/* Envio el buffer de datos a traves de la conexion TCP */
+	if (server.connected()) {
+		server.write(send_buffer, length);
+	}
+
+}
+
+/* Verifica si hay datos disponibles del servidor */
+bool eth_server_income(char * response_buffer) {
+	if(server.available()) {
+		/* leo el buffer de la red, como el formato esperado es: 
+		"last_update=yyyy-mm-ddThh:mm:ssZ" asi que no deberan ser leidos mas de 33 bytes */
+		server.readBytes(response_buffer, 128);
+		response_buffer[127] = '\0'; // Cerrar la cadena
+		return true;
+	}
+	return false;
+}
+
+/* Cerrar la conexion con el servidor */
+void eth_disconnect(void) {
+	server.stop();
+}

@@ -17,9 +17,12 @@ static char * payload_progress;		//Valorar si es necesario que sea char o se pue
 static unsigned long global_timer;
 
                     	/* 10 min */ /* 5 seg */
-#define GLOBAL_PERIOD 600000 /* 10000 */
+#define GLOBAL_PERIOD /* 5000 */ 600000
 
 static uint32_t eth_offset = 0;
+
+/* Variable para guardar el voltaje de la bateria */
+static float battery_voltage = 0.0;
 
 /* Esta funcion verifica si fuera necesario la integridad del offset y lo convierte en entero */
 uint32_t str_to_int(char * str_offset) {
@@ -70,7 +73,7 @@ bool update_sd(void) {
 
 	}
 
-	/* dd/mm/aa,hh:mm:ss,v.mv,id,tt.t,hh,v.mv,v.mv - (43 + 1 '\0') */
+	/* yyyy-mm-ddThh:mm:ssZ,v.mv,id,tt.t,hh,v.mv,v.mv - (46 + 1 '\0') */
 	sprintf(data_buffer, "%s,%s,%s", rtc_date_time, battery_voltage, store_to_sd);
 
 	Serial.print("record: ");
@@ -97,10 +100,102 @@ bool update_sd(void) {
 
 }
 
+/** Esta funcion realiza una solicitud al servidor para obtener la fecha y hora de la ultima actualizacion 
+ * 	y a partir de la respuesta actualiza el con los datos locales recogidos
+ * 	@note Esta funcion espera una respuesta del servidor (bloqueante) y no retorna hasta que la recibe respuesta
+ * 	o timeout.
+ */
+void server_update(void){
+
+	/* Debug */
+	Serial.println("Iniciando actualizacion del servidor...");
+	/* 	Se envia un GET al servidor para que este responda con la fecha y hora de la ultima actualizacion */
+	/* 	El servidor debera responder con un payload de la forma: "yyyy-mm-ddThh:mm:ssZ" (formato ISO 8601 UTC) */
+
+	if(!eth_request_connect()) {
+		/* Si no se pudo conectar al servidor, no se puede hacer nada */
+		Serial.println("No se pudo conectar al servidor");
+		return;
+	}
+		/* Se envia el comando GET */
+	data_buffer[0] = '\0'; // Limpiamos el buffer
+	sprintf(data_buffer,
+		"GET /api/device/03/last_measurement/ HTTP/1.1\r\n"
+		"Host: 10.1.111.249:8000\r\n"
+		"X-Client-Type: simple\r\n"
+		"\r\n"
+	);
+	eth_send(data_buffer, strlen(data_buffer));
+
+	data_buffer[0] = '\0'; // Limpiamos el buffer
+	/* Esperamos la respuesta del servidor un tiempo razonable */
+	unsigned long start_time = millis();
+	while (millis() - start_time < REQUEST_TIMEOUT) {		/* Verificamos si hay datos disponibles del servidor 
+			el formato de la respuesta debe ser en formato ISO 8601 UTC: "yyyy-mm-ddThh:mm:ssZ" */
+		if (eth_server_income(data_buffer)) {
+			break;
+		}
+	}
+
+	/* Si no se recibio respuesta del servidor en el tiempo esperado no hay nada mas que hacer*/
+	if(data_buffer[0] == '\0') {
+		Serial.println("No se recibio respuesta del servidor");
+		return;
+	}
+
+	/* Debug */
+	Serial.print("Respuesta del servidor: ");
+	Serial.println(data_buffer);
+	Serial.println("...");
+
+	/* Verificamos que la respuesta sea valida */
+/* 	if (strstr(data_buffer, "last_update=") == NULL) {
+		Serial.println("Respuesta del servidor no valida");
+		return;
+	} */
+
+	/* Extraemos la fecha y hora de la respuesta */
+/* 	char * date_time = strstr(data_buffer, "last_update=") + 12;
+	Serial.print("Fecha y hora de la ultima actualizacion: ");
+	Serial.println(date_time); */
+
+	/* Verificamos que la fecha y hora sea valida */
+/* 	if (!validate_date_time(date_time)) {
+		Serial.println("Fecha y hora no valida");
+		return;
+	} */
+
+	/* Si la fecha y hora es valida, hay que buscar la linea en la SD que contiene ese
+	date_time o en su defecto la mas cercana */
+/* 	uint32_t offset = sd_date_time_search(date_time); */
+
+	/* Si no se encontro un offset valido, nada que hacer */
+/* 	if (!offset)
+		return; */
+
+	/* Si se encontro un offset valido, hay que leer el bloque de datos desde la SD */
+
+	/* Debug */
+/* 	Serial.print("Offset encontrado: ");
+	Serial.println(offset); */
+
+
+
+
+
+
+	/* Limpiamos el buffer de datos */
+	data_buffer[0] = '\0';
+
+	/* Se cierra la conexión Ethernet */
+	eth_disconnect();
+
+}
+
 
 void setup(){
 
-	Serial.begin(9600);
+	Serial.begin(115200);
 
 	Serial.println("Starting...");
 
@@ -160,8 +255,20 @@ void loop() {
 		procese update_sd(); */
 		data_buffer[0] = '\0';
 
-		/* y actualizamos la SD */
-		update_sd();
+		/* Solo se actualizan los datos si hay un cambio significativo */
+		float new_battery_voltage = analogRead(BATT_PIN) * VOLT_MAX_REF / 1023;
+
+		if (fabs(battery_voltage - new_battery_voltage) > 0.1) { // Umbral de 0.1V
+			battery_voltage = new_battery_voltage;
+			update_sd();
+		}
+
+		/* Debug */
+		Serial.print("Voltaje de bateria: ");
+		Serial.println(new_battery_voltage);
+
+		/* Actualizamos los datos en el servidor */
+		//server_update();
 
 	}
 
@@ -268,41 +375,38 @@ void loop() {
 			Serial.println(data_buffer);
 			delay(50);
 
-			/** Buscar el parámetro date_time en la solicitud, 
-			Ejemplo de solicitud: "SET date_time=05,09,11,6,16,05,25" */
-			if(strstr(data_buffer, "date_time=")) {
+			/** Buscar el parámetro date_time en la solicitud,
+            Ejemplo de solicitud: "SET date_time=2025-06-09T14:32:10Z" */
+            if(strstr(data_buffer, "date_time=")) {
+                // El formato debe ser ISO 8601 UTC: yyyy-mm-ddThh:mm:ssZ
+                char * rtc_date_time = &data_buffer[14];
 
-				/* El formato seria asi second, minute, hour, dayOfWeek, dayOfMonth, month, year
-				 	SET date_time=ss,mm,hh,w,dd,mo,yy
-					SET date_time=05,09,11,6,16,05,25 */				
-				char * rtc_date_time = &data_buffer[14];
+                /* Se setea la nueva fecha_hora */
+                if (set_date_time(rtc_date_time)) {
 
-				/* Se setea la nueva fecha_hora */
-				if (set_date_time(rtc_date_time)) {
+                    /* se da la respuesta al extremo */
+                    sprintf(data_buffer, ACK_SET_DATE_TIME);
 
-					/* se da la respuesta al extremo */
-					sprintf(data_buffer, ACK_SET_DATE_TIME);
+                    /* Debug */
+                    Serial.print("Setted: ");
+                    get_time(rtc_date_time);
+                    Serial.println(rtc_date_time);
+                    delay(20);
 
-					/* Debug */
-					Serial.print("Setted: ");
-					get_time(rtc_date_time);			
-					Serial.println(rtc_date_time);
-					delay(20);
+                } else {
 
-				} else {
+                    /* No se pudo setear la fecha y hora */
+                    sprintf(data_buffer, ACK_BAD_DATETIME);
+                }
+                
+            } else {
 
-					/* No se pudo setear la fecha y hora */
-					sprintf(data_buffer, ACK_BAD_DATETIME);
-				}
-				
-			} else {
+                /* No hay un campo valido dentro del "SET" */
+                sprintf(data_buffer, ACK_ERR_NO_SET );
 
-				/* No hay un campo valido dentro del "SET" */
-				sprintf(data_buffer, ACK_ERR_NO_SET );
+            }
 
-			}
-
-		} /* Campo SET */
+        } /* Campo SET */
 
 		/* ------------------------------------------ */
 
@@ -315,7 +419,7 @@ void loop() {
 		delay(50);
 
 		/* Sending to ethernet */
-		eth_send(data_buffer);	
+		eth_response(data_buffer);	
 
 	} /* Algo se recibio */
 

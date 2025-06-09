@@ -95,8 +95,8 @@ typedef unsigned short uip_stats_t;
  *
  * \hideinitializer
  */
-#define UIP_CONF_BUFFER_SIZE     98
-//#define UIP_CONF_BUFFER_SIZE     144
+#define UIP_CONF_BUFFER_SIZE     512
+//#define UIP_CONF_BUFFER_SIZE     98
 
 /**
  * The TCP maximum segment size.

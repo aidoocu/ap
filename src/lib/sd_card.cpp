@@ -81,3 +81,41 @@ uint32_t sd_read(uint8_t * sd_buffer, size_t buff_size, uint32_t offset, uint32_
 	return 0;
 
 }
+
+uint32_t sd_date_time_search(char * date_time){
+
+	sd_file = SD.open(SD_DATALOG);
+
+	if(sd_file) {
+
+		/* Leemos linea por linea hasta encontrar la fecha y hora */
+		while (sd_file.available()) {
+			char line[128];
+			size_t len = sd_file.readBytesUntil('\n', line, sizeof(line) - 1);
+			line[len] = '\0';
+
+			/* Verificamos si la linea contiene la fecha y hora */
+			if (strstr(line, date_time) != NULL) {
+				/* Si se encuentra, devolvemos el offset de la linea */
+				uint32_t offset = sd_file.position() - len - 1; // -1 por el salto de linea
+				sd_file.close();
+				return offset;
+			}
+			/** @TODO:
+				Teniendo en cuenta que estamos buscando la ultima actualizacion, puede el servidor responda con
+				un date_time diferente a los registrados, asi que se debe buscar al menos la linea mas "cercana" en
+				tiempo, por ejemplo: el date_time contiene "2025-06-05T20:17:18Z", pero esa linea no existe, pues para
+				el servidor hubo un cambio en la fecha y hora o un error y en SD hay un registro diferente, por ejemplo
+				de minutos anteriores o posteriores. En este caso la linea mas cercana en el tiempo tendra la inmediata
+				en tiempo a la que se esta buscando en caso que esta no exista. */
+				
+		}
+
+		sd_file.close();
+	}
+
+	/* Debug */
+	Serial.println("No se encontro la fecha y hora en el archivo de la SD");
+	
+	return 0; // No se encontro la fecha y hora
+}

@@ -13,105 +13,63 @@ void get_time(char * time) {
 
 	rtc.refresh();
 
-    /* dd/mm/aa,hh:mm:ss */
-	sprintf(time, "%02d/%02d/%02d,%02d:%02d:%02d", rtc.month(), rtc.day(), rtc.year(), rtc.hour(), rtc.minute(), rtc.second());
+    /* yyyy-mm-ddThh:mm:ssZ (formato ISO 8601 UTC) */
+	sprintf(time, "20%02d-%02d-%02dT%02d:%02d:%02dZ", rtc.year(), rtc.month(), rtc.day(), rtc.hour(), rtc.minute(), rtc.second());
 	
 
 }
 
 bool set_date_time(char * date_time) {
-
-	/** RTCLib::set(byte second, 
-	 * byte minute, 
-	 * byte hour (0-23:24-hr mode only),
-	 * byte dayOfWeek (Sun = 1, Sat = 7), 
-	 * byte dayOfMonth (1-12), 
-	 * byte month, 
-	 * byte year) */
-
-	//Serial.println(date_time);
-	//delay(20);
-
-	if(!validate_date_time(date_time)) {
-		Serial.println("Invalid date_time");
-		return false;
-	}
-
- 	uint8_t second, minute, hour, dayOfWeek, dayOfMonth, month, year;
-
-	// Parsear la cadena
-	sscanf(date_time, "%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu", 
-			&second, 
-			&minute, 
-			&hour, 
-			&dayOfWeek, 
-			&dayOfMonth, 
-			&month, 
-			&year);
-   
-	// Configurar RTC
-	rtc.set(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
-
-	return true;
-
+    // Solo acepta formato ISO 8601 (yyyy-mm-ddThh:mm:ssZ)
+    if(!validate_date_time(date_time)) {
+        Serial.println("Invalid date_time");
+        return false;
+    }
+    uint8_t second, minute, hour, dayOfWeek, dayOfMonth, month, year;
+    int fullYear;
+    sscanf(date_time, "%4d-%hhu-%hhuT%hhu:%hhu:%hhuZ", 
+            &fullYear, 
+            &month, 
+            &dayOfMonth, 
+            &hour, 
+            &minute, 
+            &second);
+    year = fullYear % 100;
+    // Calcular el día de la semana (algoritmo de Zeller)
+    int m = (month == 1 || month == 2) ? month + 12 : month;
+    int y = (month == 1 || month == 2) ? fullYear - 1 : fullYear;
+    dayOfWeek = (dayOfMonth + (13*(m+1))/5 + y + y/4 - y/100 + y/400) % 7;
+    dayOfWeek = (dayOfWeek == 0) ? 7 : dayOfWeek; // 1=Domingo, 7=Sábado
+    rtc.set(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
+    return true;
 }
 
 bool validate_date_time(const char* date_time) {
-	
-	/* Formato esperado: ss,mm,hh,w,dd,mo,yy */ 
-	
-	/* verificamos que tiene el largo correcto, entre 13 y 19 caracters */ 
-	size_t len = strlen(date_time);
-  	if (len < 13 || len > 19) 
-		return false;
-
-	// Rangos mínimos y máximos para cada campo:
-	const int minVals[7] = {  0,   0,  0,  1,  1,  1,   0};  // ss, mm, hh, w, dd, mo, yy
-	const int maxVals[7] = { 59,  59, 23,  7, 31, 12,  99};  // asume year 00–99
-
-	int fields[7];
-	char buf[32];
-	strncpy(buf, date_time, sizeof(buf));
-	buf[sizeof(buf)-1] = '\0';
-
-	// Tokeniza por comas
-	char * token = strtok(buf, ",");
-	int idx = 0;
-  
-	while (token && idx < 7) {
-
-    	// Comprueba que es numérico y convierte
-    	char * endptr;
-    	long val = strtol(token, &endptr, 10);
-    	if (* endptr != '\0') 
-			return false;        // no era un número limpio
-    
-		fields[idx++] = (int)val;
-    	token = strtok(nullptr, ",");
-  	}
-
-  	// no tenía 7 campos exactos
-	if (idx != 7) 
-		return false;                 
-
-  	// Comprueba rangos básicos
-  	for (int i = 0; i < 7; i++) {
-   		if (fields[i] < minVals[i] || fields[i] > maxVals[i]) {
-      		return false;
-    	}
-  }
-
-  	// Validar días del mes según mes y año (simplificado: febrero 28/29)
-  	int day = fields[4], month = fields[5], year = fields[6];
-  	static const int daysInMonth[] = { 0,31,28,31,30,31,30,31,31,30,31,30,31 };
-  	int dim = daysInMonth[month];
-
-  	// Año bisiesto?
-  	int fullYear = 2000 + year;  // si quieres 1900+year o ajusta tu offset
-  	bool isLeap = (fullYear % 4 == 0 && (fullYear % 100 != 0 || fullYear % 400 == 0));
-  	if (month == 2 && isLeap) dim = 29;
-  	if (day > dim) return false;
-
-  return true;  // pasó todas las pruebas
-
+    // Solo acepta formato ISO 8601 UTC (yyyy-mm-ddThh:mm:ssZ)
+    if (strlen(date_time) != 20) 
+        return false;
+    if (date_time[4] != '-' || date_time[7] != '-' || 
+        date_time[10] != 'T' || date_time[13] != ':' || 
+        date_time[16] != ':' || date_time[19] != 'Z') 
+        return false;
+    int year, month, day, hour, minute, second;
+    if (sscanf(date_time, "%4d-%2d-%2dT%2d:%2d:%2dZ", 
+              &year, &month, &day, &hour, &minute, &second) != 6) {
+        return false;
+    }
+    if (year < 2000 || year > 2099 || 
+        month < 1 || month > 12 ||
+        day < 1 || day > 31 ||
+        hour < 0 || hour > 23 ||
+        minute < 0 || minute > 59 ||
+        second < 0 || second > 59) {
+        return false;
+    }
+    static const int daysInMonth[] = { 0,31,28,31,30,31,30,31,31,30,31,30,31 };
+    int maxDays = daysInMonth[month];
+    if (month == 2 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)))
+        maxDays = 29;
+    if (day > maxDays)
+        return false;
+    return true;
 }
