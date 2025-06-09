@@ -9,6 +9,7 @@
  /* Include la biblioteca oficial */
 #include <Arduino.h>
 #include <uRTCLib.h>
+#include <EEPROM.h>
 
 #define RTC_DEV DS3231
 
@@ -39,7 +40,17 @@ bool validate_date_time(const char* date_time);
  */
 bool set_date_time(char * date_time);
 
+/**
+ * Configuración persistente de zona horaria (offset en minutos respecto a UTC)
+ */
+#define TZ_OFFSET_EEPROM_ADDR 0  // Dirección EEPROM donde se guarda el offset
 
+// Devuelve el offset de zona horaria persistente (en minutos)
+int get_timezone_offset();
+// Guarda el offset de zona horaria persistente (en minutos)
+void set_timezone_offset(int offset_minutes);
+// Inicializa la zona horaria persistente (si no está configurada)
+void init_timezone_offset(int default_offset_minutes);
 
 
 #endif /* _RTC_H_ */

@@ -5,9 +5,10 @@
  */
 
 #include "rtc.h"
+#include "ap_config.h"
+#include <EEPROM.h>
 
 uRTCLib rtc(RTC_ADDR);
-
 
 void get_time(char * time, int tz_offset_minutes) {
 
@@ -137,4 +138,23 @@ bool validate_date_time(const char* date_time) {
     if (month == 2 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))) maxDays = 29;
     if (day > maxDays) return false;
     return true;
+}
+
+int get_timezone_offset() {
+    int offset = 0;
+    EEPROM.get(EEPROM_ADDR_TZ_OFFSET, offset);
+    return offset;
+}
+
+void set_timezone_offset(int offset_minutes) {
+    EEPROM.put(EEPROM_ADDR_TZ_OFFSET, offset_minutes);
+}
+
+void init_timezone_offset(int default_offset_minutes) {
+    int test;
+    EEPROM.get(EEPROM_ADDR_TZ_OFFSET, test);
+    // Si la EEPROM está vacía (0xFFFF o 0x0000), inicializa
+    if (test == 0xFFFF || test == 0x0000) {
+        set_timezone_offset(default_offset_minutes);
+    }
 }

@@ -55,4 +55,9 @@
 /* Timeout para esperar la respuesta del servidor */
 #define REQUEST_TIMEOUT 5000 //5 segundos
 
+// Direcciones EEPROM para configuraciones persistentes
+#define EEPROM_ADDR_TZ_OFFSET 0
+// Aquí puedes agregar más defines para otras configuraciones persistentes
+// #define EEPROM_ADDR_OTRA_CONFIG 4
+
 #endif /* _AP_CONFIG_H_ */
