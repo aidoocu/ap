@@ -17,7 +17,7 @@ static char * payload_progress;		//Valorar si es necesario que sea char o se pue
 static unsigned long global_timer;
 
                     	/* 10 min */ /* 5 seg */
-#define GLOBAL_PERIOD  5000   /* 600000 */
+#define GLOBAL_PERIOD  /* 5000 */   600000
 
 static uint32_t eth_offset = 0;
 
@@ -100,6 +100,52 @@ bool update_sd(void) {
 
 }
 
+/** Esta funcion busca un campo en el payload (data_buffer) y copia su valor en value 
+ * * @param field El nombre del campo a buscar en el payload
+ * * @param value El buffer donde se guardara el valor del campo encontrado
+ * * @return El largo del valor extraido, 0 si no se encontro el campo
+*/
+uint32_t get_payload_field(const char * field, char * value) {
+
+	/* 	Busca el campo en el payload y copia su valor en value */
+	char * field_ptr = strstr(data_buffer, field);
+	if (field_ptr == NULL) {
+		value[0] = '\0'; // Si no se encuentra el campo, se devuelve una cadena vacía
+		Serial.print("Campo no encontrado: ");
+		Serial.println(field);
+		return 0;
+	}
+
+	/* Avanzamos hasta el valor (después del primer':') */
+	field_ptr = strchr(field_ptr, ':');
+	if (field_ptr == NULL) {
+		value[0] = '\0'; // Si no hay ':', se devuelve una cadena vacía
+		Serial.print("Formato inválido: ");
+		return 0;
+	}
+
+	/* Saltar el ':' mas posibles espacios en blanco y comillas iniciales si tuviera*/
+	field_ptr++;
+	while (*field_ptr == ' ' || *field_ptr == '\t' || *field_ptr == '"')
+		field_ptr++;
+
+	/* Extraer el valor hasta la comilla final, la coma, salto de línea o fin de cadena */
+	int i = 0;
+	while (i < DATE_TIME_BUFF - 1 &&
+	      *field_ptr != '\0' &&
+	      *field_ptr != '"' &&
+	      *field_ptr != '\r' &&
+	      *field_ptr != '\n' &&
+	      *field_ptr != ',') {
+		value[i++] = *field_ptr++;
+	}
+	
+	value[i] = '\0'; // Cerrar la cadena
+	
+	/* Retornamos el largo del valor extraido */
+	return i;
+}
+
 /** Esta funcion realiza una solicitud al servidor para obtener la fecha y hora de la ultima actualizacion 
  * 	y a partir de la respuesta actualiza el con los datos locales recogidos
  * 	@note Esta funcion espera una respuesta del servidor (bloqueante) y no retorna hasta que la recibe respuesta
@@ -123,7 +169,7 @@ void server_last_update_request(void){
 		"GET /api/device/02/last_measurement/ HTTP/1.1\r\n"
 		"Host: 10.1.111.249:8000\r\n"
 		"X-Client-Type: Senspire AP V1\r\n"
-		"X-Client-Id: SPAP-0001\r\n"
+		"X-Device-ID: SPAP-0001\r\n"
 		"Accept: text/plain\r\n"
 		"X-Fields: timestamp,variable\r\n"
 		"\r\n"
@@ -157,63 +203,27 @@ void server_last_update_request(void){
 	Serial.println(data_buffer);
 	Serial.println("...");
 
-	/* ToDo -------  get_payload_field("field"); -------*/
-
-
-	/* Extraemos el valor de date_time_utc de la respuesta, que tendria el formato "timestamp:yyyy-mm-ddThh:mm:ssZ" */
-	char * date_time_ptr = strstr(data_buffer, "timestamp");
-	if (date_time_ptr == NULL) {
-		Serial.println("Formato de respuesta inválido: no se encontró 'timestamp'");
-		return;
-	}
-	
-	/* Avanzamos hasta el valor (después del primer':' y posibles espacios o comillas) */
-	date_time_ptr = strchr(date_time_ptr, ':');
-	if (date_time_ptr == NULL) {
-		Serial.println("Formato de respuesta inválido: no hay ':'");
-		return;
-	}
-	date_time_ptr++; // Saltar el ':'
-
-	/* Debug */
-	Serial.print("Timestamp (sin procesar): ");
-	Serial.println(date_time_ptr);
-
-	/* Saltar espacios en blanco y comillas iniciales si tuviera*/
-	while (*date_time_ptr == ' ' || *date_time_ptr == '\t' || *date_time_ptr == '"')
-		date_time_ptr++;
-	
-	/* Extraer el timestamp hasta la comilla final, la coma, salto de línea o fin de cadena */
 	char timestamp[DATE_TIME_BUFF];
-	int i = 0;
-	while (i < DATE_TIME_BUFF - 1 &&
-	      *date_time_ptr != '\0' &&
-	      *date_time_ptr != '"' &&
-	      *date_time_ptr != '\r' &&
-	      *date_time_ptr != '\n' &&
-	      *date_time_ptr != ',') {
-		timestamp[i++] = *date_time_ptr++;
+	/* Si el campo no se encontró, o no es del largo correcto nada mas que hace */
+	if (get_payload_field("timestamp", timestamp) != DATE_TIME_BUFF) {
+		Serial.print("Timestap no encontrado o invalido");
+		return;
 	}
-	timestamp[i] = '\0';
-
-
-	/* /// ToDo -------  get_payload_field("field"); -------*/
-
 
 	/* Debug */
 	Serial.print("Timestamp extraído: ");
 	Serial.println(timestamp);
 
 
-		/* Verificamos que el timestamp sea válido */
+	/* Verificamos que el timestamp sea válido */
 	if (!validate_date_time(timestamp)) {
 		Serial.println("Formato de timestamp inválido");
 		return;
 	}
 	
 	/* Si el timestamp es válido, buscamos la línea en la SD que lo contiene */
-	uint32_t offset = sd_date_time_search(timestamp);
-		/* Si no se encontró un offset válido */
+	size_t offset = sd_date_time_search(timestamp);
+	/* Si no se encontró un offset válido */
 	if (!offset) {
 		Serial.println("No se encontró el timestamp en la SD");
 		return;
@@ -223,19 +233,24 @@ void server_last_update_request(void){
 	Serial.print("Offset encontrado: ");
 	Serial.println(offset);
 	
-	/* Aquí puedes usar el offset como necesites, por ejemplo, para leer datos de la SD
-	   o para enviar otra petición al servidor */
+	/* Aqui vamos a preparar el csv de respuesta. Para ello vamos a tomar la primera
+	fila del archivo CSV que contiene los encabezados para que servidor pueda separar 
+	las columnas por variables */
 
+	/* primero volvemos a limpiar el data_buffer */
+	data_buffer[0] = '\0';
 
-
-
-
+	/* se lee la fila en la SD */
+	if (!sd_read_csv_row(offset, data_buffer)) {
+		Serial.println("No se pudo leer la fila del CSV");
+		eth_disconnect(); // Cerramos la conexión antes de retornar
+		return;
+	}
 
 	/* Limpiamos el buffer de datos */
 	data_buffer[0] = '\0';
 
-	/* Se cierra la conexión Ethernet */
-	eth_disconnect();
+
 
 }
 
@@ -315,7 +330,7 @@ void loop() {
 		Serial.println(new_battery_voltage);
 
 		/* Actualizamos los datos en el servidor */
-		server_last_update_request();
+		//server_last_update_request();
 
 	}
 

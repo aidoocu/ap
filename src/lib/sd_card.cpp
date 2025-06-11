@@ -82,6 +82,35 @@ uint32_t sd_read(uint8_t * sd_buffer, size_t buff_size, uint32_t offset, uint32_
 
 }
 
+/**
+ * Lee una fila del archivo CSV que comienza en la posición de byte específica (offset)
+ * @param offset Posición en bytes donde comienza la fila a leer
+ * @param sd_buffer Buffer donde se almacenará la fila leída
+ * @return Número de bytes leídos o 0 si hubo error
+ */
+uint32_t sd_read_csv_row(size_t offset, char * sd_buffer){
+	sd_file = SD.open(SD_DATALOG);
+
+	if (!sd_file) {
+		Serial.println("Error al abrir el archivo SD");
+		return 0;
+	}
+	
+	// Posicionar el puntero en el offset especificado
+	if (!sd_file.seek(offset)) {
+		Serial.println("Error al buscar la posición en el archivo");
+		sd_file.close();
+		return 0;
+	}
+	
+	// Leer hasta encontrar un salto de línea o fin de archivo
+	size_t len = sd_file.readBytesUntil('\n', sd_buffer, 127);
+	sd_buffer[len] = '\0'; // Asegurarse de que termina con null
+	
+	sd_file.close();
+	return len;
+}
+
 uint32_t sd_date_time_search(char * date_time){
 
 	sd_file = SD.open(SD_DATALOG);
@@ -104,7 +133,7 @@ uint32_t sd_date_time_search(char * date_time){
 			/** @TODO:
 				Teniendo en cuenta que estamos buscando la ultima actualizacion, puede el servidor responda con
 				un date_time diferente a los registrados, asi que se debe buscar al menos la linea mas "cercana" en
-				tiempo, por ejemplo: el date_time contiene "2025-06-05T20:17:18Z", pero esa linea no existe, pues para
+				tiempo, por ejemplo: el date_time contiene "06/05/25,20:17:18", pero esa linea no existe, pues para
 				el servidor hubo un cambio en la fecha y hora o un error y en SD hay un registro diferente, por ejemplo
 				de minutos anteriores o posteriores. En este caso la linea mas cercana en el tiempo tendra la inmediata
 				en tiempo a la que se esta buscando en caso que esta no exista. */
