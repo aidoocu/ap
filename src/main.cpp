@@ -17,7 +17,7 @@ static char * payload_progress;		//Valorar si es necesario que sea char o se pue
 static unsigned long global_timer;
 
                     	/* 10 min */ /* 5 seg */
-#define GLOBAL_PERIOD /* 5000 */ 600000
+#define GLOBAL_PERIOD  5000   /* 600000 */
 
 static uint32_t eth_offset = 0;
 
@@ -105,7 +105,7 @@ bool update_sd(void) {
  * 	@note Esta funcion espera una respuesta del servidor (bloqueante) y no retorna hasta que la recibe respuesta
  * 	o timeout.
  */
-void server_update(void){
+void server_last_update_request(void){
 
 	/* Debug */
 	Serial.println("Iniciando actualizacion del servidor...");
@@ -117,27 +117,36 @@ void server_update(void){
 		Serial.println("No se pudo conectar al servidor");
 		return;
 	}
-		/* Se envia el comando GET */
+	
 	data_buffer[0] = '\0'; // Limpiamos el buffer
 	sprintf(data_buffer,
-		"GET /api/device/03/last_measurement/ HTTP/1.1\r\n"
+		"GET /api/device/02/last_measurement/ HTTP/1.1\r\n"
 		"Host: 10.1.111.249:8000\r\n"
-		"X-Client-Type: simple\r\n"
+		"X-Client-Type: Senspire AP V1\r\n"
+		"X-Client-Id: SPAP-0001\r\n"
+		"Accept: text/plain\r\n"
+		"X-Fields: timestamp,variable\r\n"
 		"\r\n"
 	);
+
+	/* Se envia el comando GET */
 	eth_send(data_buffer, strlen(data_buffer));
 
 	data_buffer[0] = '\0'; // Limpiamos el buffer
 	/* Esperamos la respuesta del servidor un tiempo razonable */
 	unsigned long start_time = millis();
-	while (millis() - start_time < REQUEST_TIMEOUT) {		/* Verificamos si hay datos disponibles del servidor 
-			el formato de la respuesta debe ser en formato ISO 8601 UTC: "yyyy-mm-ddThh:mm:ssZ" */
+	while (millis() - start_time < REQUEST_TIMEOUT) {		/* Verificamos si hay datos disponibles del servidor  */
 		if (eth_server_income(data_buffer)) {
 			break;
 		}
 	}
 
-	/* Si no se recibio respuesta del servidor en el tiempo esperado no hay nada mas que hacer*/
+	/* 	Tanto si se ha superado el tiempo de espera y no se recibio respuesta del servidor
+		o de facto se recibio respuesta se cierra la conexión pues el update se hara en otro
+		endpoint specializado */
+	eth_disconnect();
+
+	/* Si no se recibio respuesta del servidor en el tiempo esperado, nada que hacer */
 	if(data_buffer[0] == '\0') {
 		Serial.println("No se recibio respuesta del servidor");
 		return;
@@ -148,36 +157,74 @@ void server_update(void){
 	Serial.println(data_buffer);
 	Serial.println("...");
 
-	/* Verificamos que la respuesta sea valida */
-/* 	if (strstr(data_buffer, "last_update=") == NULL) {
-		Serial.println("Respuesta del servidor no valida");
+	/* ToDo -------  get_payload_field("field"); -------*/
+
+
+	/* Extraemos el valor de date_time_utc de la respuesta, que tendria el formato "timestamp:yyyy-mm-ddThh:mm:ssZ" */
+	char * date_time_ptr = strstr(data_buffer, "timestamp");
+	if (date_time_ptr == NULL) {
+		Serial.println("Formato de respuesta inválido: no se encontró 'timestamp'");
 		return;
-	} */
-
-	/* Extraemos la fecha y hora de la respuesta */
-/* 	char * date_time = strstr(data_buffer, "last_update=") + 12;
-	Serial.print("Fecha y hora de la ultima actualizacion: ");
-	Serial.println(date_time); */
-
-	/* Verificamos que la fecha y hora sea valida */
-/* 	if (!validate_date_time(date_time)) {
-		Serial.println("Fecha y hora no valida");
+	}
+	
+	/* Avanzamos hasta el valor (después del primer':' y posibles espacios o comillas) */
+	date_time_ptr = strchr(date_time_ptr, ':');
+	if (date_time_ptr == NULL) {
+		Serial.println("Formato de respuesta inválido: no hay ':'");
 		return;
-	} */
-
-	/* Si la fecha y hora es valida, hay que buscar la linea en la SD que contiene ese
-	date_time o en su defecto la mas cercana */
-/* 	uint32_t offset = sd_date_time_search(date_time); */
-
-	/* Si no se encontro un offset valido, nada que hacer */
-/* 	if (!offset)
-		return; */
-
-	/* Si se encontro un offset valido, hay que leer el bloque de datos desde la SD */
+	}
+	date_time_ptr++; // Saltar el ':'
 
 	/* Debug */
-/* 	Serial.print("Offset encontrado: ");
-	Serial.println(offset); */
+	Serial.print("Timestamp (sin procesar): ");
+	Serial.println(date_time_ptr);
+
+	/* Saltar espacios en blanco y comillas iniciales si tuviera*/
+	while (*date_time_ptr == ' ' || *date_time_ptr == '\t' || *date_time_ptr == '"')
+		date_time_ptr++;
+	
+	/* Extraer el timestamp hasta la comilla final, la coma, salto de línea o fin de cadena */
+	char timestamp[DATE_TIME_BUFF];
+	int i = 0;
+	while (i < DATE_TIME_BUFF - 1 &&
+	      *date_time_ptr != '\0' &&
+	      *date_time_ptr != '"' &&
+	      *date_time_ptr != '\r' &&
+	      *date_time_ptr != '\n' &&
+	      *date_time_ptr != ',') {
+		timestamp[i++] = *date_time_ptr++;
+	}
+	timestamp[i] = '\0';
+
+
+	/* /// ToDo -------  get_payload_field("field"); -------*/
+
+
+	/* Debug */
+	Serial.print("Timestamp extraído: ");
+	Serial.println(timestamp);
+
+
+		/* Verificamos que el timestamp sea válido */
+	if (!validate_date_time(timestamp)) {
+		Serial.println("Formato de timestamp inválido");
+		return;
+	}
+	
+	/* Si el timestamp es válido, buscamos la línea en la SD que lo contiene */
+	uint32_t offset = sd_date_time_search(timestamp);
+		/* Si no se encontró un offset válido */
+	if (!offset) {
+		Serial.println("No se encontró el timestamp en la SD");
+		return;
+	}
+	
+	/* Debug - Mostrar el offset encontrado */
+	Serial.print("Offset encontrado: ");
+	Serial.println(offset);
+	
+	/* Aquí puedes usar el offset como necesites, por ejemplo, para leer datos de la SD
+	   o para enviar otra petición al servidor */
 
 
 
@@ -268,7 +315,7 @@ void loop() {
 		Serial.println(new_battery_voltage);
 
 		/* Actualizamos los datos en el servidor */
-		//server_update();
+		server_last_update_request();
 
 	}
 

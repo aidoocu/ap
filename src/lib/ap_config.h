@@ -46,7 +46,7 @@
 #define ACK_BAD_DATETIME    "ACK=407"       //Error al grabar en la SD
 
 /* Global buffer, sera tan largo como lo que se va a transimitir por eth */
-#define BUFFER_SIZE 128
+#define BUFFER_SIZE 512
 /* largo del header OK_RESP */
 #define HEADER_OK_RESP_LENGTH (sizeof(ACK_OK_RESP) - 1) //Aqui el lee tambien el '\0' entonces -1
 /* Pedazo maximo de memoria que se puede leer desde la SD para no devordar el buffer */
@@ -56,7 +56,7 @@
 #define REQUEST_TIMEOUT 5000 //5 segundos
 
 // Direcciones EEPROM para configuraciones persistentes
-#define EEPROM_ADDR_TZ_OFFSET 0
+// La dirección 0 ya no se usa para timezone offset (eliminado)
 // Aquí puedes agregar más defines para otras configuraciones persistentes
 // #define EEPROM_ADDR_OTRA_CONFIG 4
 

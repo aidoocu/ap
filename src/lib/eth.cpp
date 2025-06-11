@@ -9,6 +9,8 @@
 #include <Arduino.h>
 #include <SPI.h>
 
+#include "ap_config.h"
+
 
 /* Servicio donde el AP escucha */
 static EthernetServer tcp_server = EthernetServer(TCP_PORT);
@@ -127,10 +129,9 @@ void eth_send(char * send_buffer, size_t length) {
 /* Verifica si hay datos disponibles del servidor */
 bool eth_server_income(char * response_buffer) {
 	if(server.available()) {
-		/* leo el buffer de la red, como el formato esperado es: 
-		"last_update=yyyy-mm-ddThh:mm:ssZ" asi que no deberan ser leidos mas de 33 bytes */
-		server.readBytes(response_buffer, 128);
-		response_buffer[127] = '\0'; // Cerrar la cadena
+		/* leo el buffer de la red */
+		uint16_t bytes_read = server.readBytes(response_buffer, BUFFER_SIZE - 1); // Dejar espacio para el caracter nulo
+		response_buffer[bytes_read] = '\0'; // Cerrar la cadena correctamente
 		return true;
 	}
 	return false;
