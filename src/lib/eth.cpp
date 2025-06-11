@@ -47,6 +47,11 @@ void eth_init(void){
  	if (Ethernet.hardwareStatus() == EthernetNoHardware) {
 		Serial.println(F("No Ethernet hardware found."));
 	}
+	else if (Ethernet.linkStatus() == LinkOFF) {
+		Serial.println(F("Ethernet cable is not connected."));
+	} else {
+		Serial.println(F("Ethernet hardware initialized successfully."));
+	}
 
 	tcp_server.begin();
 
