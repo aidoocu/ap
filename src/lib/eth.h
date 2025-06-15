@@ -48,4 +48,14 @@ bool eth_server_income(char * response_buffer);
 void eth_send(char * send_buffer, size_t length = 0);
 void eth_disconnect(void);
 
+/** Envia datos al cliente
+ * @param data_buffer  buffer con los datos a enviar
+ * @return true si se pudo enviar los datos, false si no se pudo conectar al servidor
+ * * @note Esta funcion espera a que se establezca la conexion con el servidor antes de enviar los datos
+ * * @note El buffer debe estar terminado en '\0' para que se envíe correctamente
+ * * @note El tamaño del buffer no es necesario, ya que se usa strlen para obtener el largo
+ * * @todo El buffer se asume en todo momento que es data_buffer, incluido su tamano maximo por lo que 
+ *         habria que implementar una verificacion de limites, o de cambio de buffer o cosas asi
+ */
+bool eth_client_send(char * data_buffer/* , size_t length */);
 #endif /* ETH_H_ */

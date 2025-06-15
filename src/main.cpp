@@ -17,7 +17,7 @@ static char * payload_progress;		//Valorar si es necesario que sea char o se pue
 static unsigned long global_timer;
 
                     	/* 10 min */ /* 5 seg */
-#define GLOBAL_PERIOD  /* 5000 */   600000
+#define GLOBAL_PERIOD   5000    /* 600000 */
 
 static uint32_t eth_offset = 0;
 
@@ -54,14 +54,15 @@ bool update_sd(void) {
 	char battery_voltage[5];
 	dtostrf(analogRead(BATT_PIN) * VOLT_MAX_REF / 1023, 4, 2, battery_voltage); //voltage
 
-	char local_block[] = { 'A', 'P', ',', '\"', '\"', ',','\"', '\"', ',', '\"', '\"', ',', '\"', '\"', ',', '\"', '\"','\0' };
+	/* Buffer para crear el bloque local que in */
 	char received_buffer[RECV_LENGTH];
+
 	char * store_to_sd = received_buffer;
 
 	/* 	Si el buffer es vacio significa que no hay nada para procesar, 
 		entonces se guarda el bloque local */
 	if (data_buffer[0] == '\0') {
-		store_to_sd = local_block;
+		sprintf(store_to_sd, "AP,,,,%s", battery_voltage);
 	/* Si no esta vacio hay que guardar su contenido en la memoria */
 	} else {
 		/* Si el buffer es mayor a 21 bytes, significa que hay un problema con el payload */
@@ -69,12 +70,13 @@ bool update_sd(void) {
 		if(strlen(data_buffer) > 21)
 			return false;
 
-		sprintf(store_to_sd, "%s", data_buffer);
+		/* Ponemos una coma al final para recrear la columna de batt */
+		sprintf(store_to_sd, "%s,", data_buffer);
 
 	}
 
-	/* yyyy-mm-ddThh:mm:ssZ,v.mv,id,tt.t,hh,v.mv,v.mv - (46 + 1 '\0') */
-	sprintf(data_buffer, "%s,%s,%s", rtc_date_time, battery_voltage, store_to_sd);
+	/* yyyy-mm-ddThh:mm:ssZ,id,tt.t,hh,v.mv,v.mv,v.mv - (46 + 1 '\0') */
+	sprintf(data_buffer, "%s,%s", rtc_date_time, store_to_sd);
 
 	Serial.print("record: ");
 	Serial.println(data_buffer);
@@ -141,6 +143,14 @@ uint32_t get_payload_field(const char * field, char * value) {
 	}
 	
 	value[i] = '\0'; // Cerrar la cadena
+
+	/* Debug */
+	Serial.print("Campo encontrado: ");
+	Serial.print(field);
+	Serial.print(" - Valor: ");
+	Serial.println(value);
+	Serial.print("Largo del valor: ");
+	Serial.println(i);
 	
 	/* Retornamos el largo del valor extraido */
 	return i;
@@ -153,48 +163,27 @@ uint32_t get_payload_field(const char * field, char * value) {
  */
 void server_last_update_request(void){
 
+	/* ---------------------------- Solicitud de último update ---------------------------- */
+
 	/* Debug */
 	Serial.println("Iniciando actualizacion del servidor...");
 	/* 	Se envia un GET al servidor para que este responda con la fecha y hora de la ultima actualizacion */
 	/* 	El servidor debera responder con un payload de la forma: "yyyy-mm-ddThh:mm:ssZ" (formato ISO 8601 UTC) */
-
-	if(!eth_request_connect()) {
-		/* Si no se pudo conectar al servidor, no se puede hacer nada */
-		Serial.println("No se pudo conectar al servidor");
-		return;
-	}
 	
 	data_buffer[0] = '\0'; // Limpiamos el buffer
 	sprintf(data_buffer,
-		"GET /api/device/02/last_measurement/ HTTP/1.1\r\n"
+		"GET /api/device/03/last_measurement/ HTTP/1.1\r\n"
 		"Host: 10.1.111.249:8000\r\n"
 		"X-Client-Type: Senspire AP V1\r\n"
 		"X-Device-ID: SPAP-0001\r\n"
-		"Accept: text/plain\r\n"
-		"X-Fields: timestamp,variable\r\n"
+		//"Accept: text/plain\r\n"
+		"X-Fields: timestamp\r\n"
 		"\r\n"
 	);
 
-	/* Se envia el comando GET */
-	eth_send(data_buffer, strlen(data_buffer));
-
-	data_buffer[0] = '\0'; // Limpiamos el buffer
-	/* Esperamos la respuesta del servidor un tiempo razonable */
-	unsigned long start_time = millis();
-	while (millis() - start_time < REQUEST_TIMEOUT) {		/* Verificamos si hay datos disponibles del servidor  */
-		if (eth_server_income(data_buffer)) {
-			break;
-		}
-	}
-
-	/* 	Tanto si se ha superado el tiempo de espera y no se recibio respuesta del servidor
-		o de facto se recibio respuesta se cierra la conexión pues el update se hara en otro
-		endpoint specializado */
-	eth_disconnect();
-
-	/* Si no se recibio respuesta del servidor en el tiempo esperado, nada que hacer */
-	if(data_buffer[0] == '\0') {
-		Serial.println("No se recibio respuesta del servidor");
+	if(!eth_client_send(data_buffer)) {
+		/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
+		Serial.println("Fallo al enviar la solicitud de timestamp al servidor");
 		return;
 	}
 
@@ -205,8 +194,8 @@ void server_last_update_request(void){
 
 	char timestamp[DATE_TIME_BUFF];
 	/* Si el campo no se encontró, o no es del largo correcto nada mas que hace */
-	if (get_payload_field("timestamp", timestamp) != DATE_TIME_BUFF) {
-		Serial.print("Timestap no encontrado o invalido");
+	if (get_payload_field("timestamp", timestamp) != DATE_TIME_BUFF - 1) {
+		Serial.println("Timestamp no encontrado o invalido");
 		return;
 	}
 
@@ -214,18 +203,25 @@ void server_last_update_request(void){
 	Serial.print("Timestamp extraído: ");
 	Serial.println(timestamp);
 
-
 	/* Verificamos que el timestamp sea válido */
 	if (!validate_date_time(timestamp)) {
 		Serial.println("Formato de timestamp inválido");
 		return;
 	}
-	
+
+	/* ---------------------------- Búsqueda en la SD del último timestamp ---------------------------- */
+
+	/* Mecanismo para asociar un offset a la última fecha/hora despachada.
+	   La función sd_date_time_next_line_search ya implementa un sistema de caché 
+	   que guarda y recupera automáticamente el último timestamp y su offset correspondiente.
+	   De esta forma cuando se recibe una petición con el mismo timestamp, se recupera 
+	   directamente el offset sin necesidad de buscar en todo el archivo. */
+
 	/* Si el timestamp es válido, buscamos la línea en la SD que lo contiene */
-	size_t offset = sd_date_time_search(timestamp);
+	size_t offset = sd_date_time_next_line_search(timestamp);
 	/* Si no se encontró un offset válido */
 	if (!offset) {
-		Serial.println("No se encontró el timestamp en la SD");
+		Serial.println("No se encontró el offset del timestamp en la SD");
 		return;
 	}
 	
@@ -240,17 +236,67 @@ void server_last_update_request(void){
 	/* primero volvemos a limpiar el data_buffer */
 	data_buffer[0] = '\0';
 
-	/* se lee la fila en la SD */
-	if (!sd_read_csv_row(offset, data_buffer)) {
-		Serial.println("No se pudo leer la fila del CSV");
-		eth_disconnect(); // Cerramos la conexión antes de retornar
+	/* Agregamos los encabezados al buffer */
+	sprintf(data_buffer,
+	"POST /api/upload-csv/ HTTP/1.1\r\n"
+	"Host: 10.1.111.249:8000\r\n"
+	"X-Device-ID: SPAPV1-0001\r\n"
+	"\r\n"
+	);
+	
+	uint32_t data_buffer_pointer = strlen(data_buffer);
+	/* A partir de aqui vamos a ir llenando el buffer con los datos del CSV */
+
+	/* Agregamos un salto de línea al final de los encabezados sustituyendo el '\0' */
+	//data_buffer[data_buffer_pointer] = '\n';
+	/* Apuntamos a la siguiente posición del buffer */
+	//data_buffer_pointer++;
+
+	/* Leemos la primera fila del CSV, que contiene los encabezados */
+	uint8_t first_row_length = sd_read_csv_row(0, data_buffer + data_buffer_pointer);
+	/* Si no se pudo leer la primera fila, no hay nada que hacer */
+	if (!first_row_length) {
+		Serial.println("No se pudo leer la primera fila del CSV");
 		return;
 	}
 
+	data_buffer_pointer += first_row_length; // Avanzamos el puntero del buffer
+
+	/* Agregamos un salto de línea al final de la primera fila */
+	data_buffer[data_buffer_pointer] = '\n';
+	/* Aumentamos el largo del buffer leido */
+	data_buffer_pointer++;
+	/* Nos aseguramos que sea una cadena */
+	//data_buffer[data_buffer_pointer] = '\0';
+
+	/* Leemos las filas desde el offset encontrado hasta llenar el buffer o fin de archivo */
+	if (!sd_read_csv_rows(offset, (data_buffer + data_buffer_pointer), (BUFFER_SIZE - data_buffer_pointer - 1))) {
+		Serial.println("No se pudo leer las filas del CSV");
+		return;
+	}
+
+	/* Debug */
+	Serial.println("Datos CSV leídos correctamente:\n\n");
+	Serial.println(data_buffer);
+
+	/* ---------------------------- Envio de los updates ---------------------------- */
+
+	if(!eth_client_send(data_buffer)) {
+		/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
+		Serial.println("Fallo al enviar la solicitud de update al servidor");
+		return;
+	}
+
+	/* .... */
+
+	/* Debug */
+	Serial.print("Respuesta del servidor: ");
+	Serial.println(data_buffer);
+
 	/* Limpiamos el buffer de datos */
 	data_buffer[0] = '\0';
-
-
+	/* Actualizamos el offset para la proxima vez */
+	//send_offset = offset + sd_file_size(); // Actualizamos el offset para la proxima vez
 
 }
 
@@ -320,24 +366,24 @@ void loop() {
 		/* Solo se actualizan los datos si hay un cambio significativo */
 		float new_battery_voltage = analogRead(BATT_PIN) * VOLT_MAX_REF / 1023;
 
-		if (fabs(battery_voltage - new_battery_voltage) > 0.1) { // Umbral de 0.1V
-			battery_voltage = new_battery_voltage;
-			update_sd();
-		}
+		//if (fabs(battery_voltage - new_battery_voltage) > 0.1) { // Umbral de 0.1V
+		//	battery_voltage = new_battery_voltage;
+			//update_sd();
+		//}
 
 		/* Debug */
 		Serial.print("Voltaje de bateria: ");
 		Serial.println(new_battery_voltage);
 
 		/* Actualizamos los datos en el servidor */
-		//server_last_update_request();
+		server_last_update_request();
 
 	}
 
 	/* Chequea la radio y actualiza en la SD si hay algo nuevo */
-  	if (nrf_check(data_buffer)) {
-		update_sd();
-	}
+  	//if (nrf_check(data_buffer)) {
+	//	update_sd();
+	//}
 
 	/* Verificamos si hay datos nuevos en la conexión Ethernet */
 	if (eth_check(data_buffer)) {

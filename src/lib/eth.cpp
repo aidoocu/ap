@@ -146,3 +146,37 @@ bool eth_server_income(char * response_buffer) {
 void eth_disconnect(void) {
 	server.stop();
 }
+
+/** Envia datos al cliente */
+bool eth_client_send(char * data_buffer/* , size_t length */) {
+
+	if(!eth_request_connect()) {
+		/* Si no se pudo conectar al servidor, no se puede hacer nada */
+		Serial.println("No se pudo conectar al servidor");
+		return false;
+	}
+
+	/* Se envia el comando GET */
+	eth_send(data_buffer, strlen(data_buffer));
+
+	data_buffer[0] = '\0'; // Limpiamos el buffer
+	/* Esperamos la respuesta del servidor un tiempo razonable */
+	unsigned long start_time = millis();
+	while (millis() - start_time < REQUEST_TIMEOUT) {		/* Verificamos si hay datos disponibles del servidor  */
+		if (eth_server_income(data_buffer)) {
+			break;
+		}
+	}
+
+	/* 	Tanto si se ha superado el tiempo de espera y no se recibio respuesta del servidor
+	o de facto se recibio respuesta se cierra la conexión */
+	eth_disconnect();
+
+	/* Si no se recibio respuesta del servidor en el tiempo esperado, nada que hacer */
+	if(data_buffer[0] == '\0') {
+		Serial.println("No se recibio respuesta del servidor");
+		return false;
+	}
+
+	return true;
+}
