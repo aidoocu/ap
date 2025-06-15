@@ -171,6 +171,8 @@ bool eth_client_send(char * data_buffer/* , size_t length */) {
 	/* 	Tanto si se ha superado el tiempo de espera y no se recibio respuesta del servidor
 	o de facto se recibio respuesta se cierra la conexión */
 	eth_disconnect();
+	/* La conexión se actualiza para limpiar todos los recursos utilizados */
+	eth_update_cnx();
 
 	/* Si no se recibio respuesta del servidor en el tiempo esperado, nada que hacer */
 	if(data_buffer[0] == '\0') {

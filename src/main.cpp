@@ -247,11 +247,6 @@ void server_last_update_request(void){
 	uint32_t data_buffer_pointer = strlen(data_buffer);
 	/* A partir de aqui vamos a ir llenando el buffer con los datos del CSV */
 
-	/* Agregamos un salto de línea al final de los encabezados sustituyendo el '\0' */
-	//data_buffer[data_buffer_pointer] = '\n';
-	/* Apuntamos a la siguiente posición del buffer */
-	//data_buffer_pointer++;
-
 	/* Leemos la primera fila del CSV, que contiene los encabezados */
 	uint8_t first_row_length = sd_read_csv_row(0, data_buffer + data_buffer_pointer);
 	/* Si no se pudo leer la primera fila, no hay nada que hacer */
@@ -262,12 +257,14 @@ void server_last_update_request(void){
 
 	data_buffer_pointer += first_row_length; // Avanzamos el puntero del buffer
 
-	/* Agregamos un salto de línea al final de la primera fila */
+	/* Cambiamos el '\0' por un salto de línea al final de la primera fila */
 	data_buffer[data_buffer_pointer] = '\n';
 	/* Aumentamos el largo del buffer leido */
 	data_buffer_pointer++;
-	/* Nos aseguramos que sea una cadena */
-	//data_buffer[data_buffer_pointer] = '\0';
+	/* Ponemos el cierre de cadena */
+	data_buffer[data_buffer_pointer] = '\0';
+	/* No se avanza pues ese cierre o se usara como terminador en caso que no haya mas datos
+		o sera sustituido por sd_read_csv_rows con el primer caracter de la proxima fila */
 
 	/* Leemos las filas desde el offset encontrado hasta llenar el buffer o fin de archivo */
 	if (!sd_read_csv_rows(offset, (data_buffer + data_buffer_pointer), (BUFFER_SIZE - data_buffer_pointer - 1))) {
@@ -276,7 +273,7 @@ void server_last_update_request(void){
 	}
 
 	/* Debug */
-	Serial.println("Datos CSV leídos correctamente:\n\n");
+	Serial.println("Datos CSV leídos correctamente:\n");
 	Serial.println(data_buffer);
 
 	/* ---------------------------- Envio de los updates ---------------------------- */
