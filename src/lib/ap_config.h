@@ -37,36 +37,6 @@
 /* Global buffer, sera tan largo como lo que se va a transimitir por eth */
 #define BUFFER_SIZE 512
 
-/* Mensajes */
-#define ACK_OK_RESP         "ACK=200 pl="   //Recurso encontrado, a continuacion viene la respuesta
-#define ACK_OK_UPDATED      "ACK=201"       //Recurso actualizado, nada nuevo que enviar
-#define ACK_SET_DATE_TIME   "ACK=202"       //Actualizacion de la fecha y hora del RTC
-#define ACK_ERR_SERVER      "ACK=500"       //Erro en el servidor. El archivo no abre o esta completamente en blanco
-#define ACK_ERR_OFFSET      "ACK=402"       //El offset es mayor que el tamannno del archivo 
-#define ACK_ERR_NO_OFFSET   "ACK=403"       //No hay offset en la peticion
-#define ACK_ERR_NO_SET      "ACK=404"       //Recurso para SET no encontrado o SET no permitido
-#define ACK_ERR_NO_GET      "ACK=405"       //Recurso para GET no encontrado o GET no permitido
-#define ACK_ERR_NO_RECORD   "ACK=406"       //Error al grabar en la SD
-#define ACK_BAD_DATETIME    "ACK=407"       //Error al grabar en la SD
-
-#define POST_CSV_HEADER "POST /api/upload-csv/ HTTP/1.1\r\n" \
-                        "Host: 10.1.111.249:8000\r\n" \
-                        "X-Device-ID: SPAPV1-0001\r\n" \
-                        "Content-Length: %d\r\n" \
-                        "Content-Type: text/csv\r\n" \
-                        "\r\n"
-
-/** Reservamos espacio para el header, el valor de Content-Length y el cierre de cadena */
-#define POST_CSV_BODY_LENGTH (BUFFER_SIZE - sizeof(POST_CSV_HEADER) - 4)
-
-#define GET_LAST_MEASUREMENT_HEADER "GET /api/device/03/last_measurement/ HTTP/1.1\r\n" \
-                                    "Host: 10.1.111.249:8000\r\n" \
-                                    "X-Client-Type: Senspire AP V1\r\n" \
-                                    "X-Device-ID: SPAP-0001\r\n" \
-                                    "X-Fields: timestamp\r\n" \
-                                    "\r\n"
-
-
 
 /* largo del header OK_RESP */
 #define HEADER_OK_RESP_LENGTH (sizeof(ACK_OK_RESP) - 1) //Aqui el lee tambien el '\0' entonces -1

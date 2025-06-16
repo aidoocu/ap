@@ -17,7 +17,7 @@ static char * payload_progress;		//Valorar si es necesario que sea char o se pue
 static unsigned long global_timer;
 
                     	/* 10 min */ /* 5 seg */
-#define GLOBAL_PERIOD   5000    /* 600000 */
+#define GLOBAL_PERIOD   /* 5000 */  600000
 
 static uint32_t eth_offset = 0;
 
@@ -51,9 +51,6 @@ bool update_sd(void) {
 	char rtc_date_time[DATE_TIME_BUFF];
 	get_time(rtc_date_time); //time;
 	
-	char battery_voltage[5];
-	dtostrf(analogRead(BATT_PIN) * VOLT_MAX_REF / 1023, 4, 2, battery_voltage); //voltage
-
 	/* Buffer para crear el bloque local que in */
 	char received_buffer[RECV_LENGTH];
 
@@ -62,6 +59,8 @@ bool update_sd(void) {
 	/* 	Si el buffer es vacio significa que no hay nada para procesar, 
 		entonces se guarda el bloque local */
 	if (data_buffer[0] == '\0') {
+		char battery_voltage[5];
+		dtostrf(analogRead(BATT_PIN) * VOLT_MAX_REF / 1023, 4, 2, battery_voltage); //voltage
 		sprintf(store_to_sd, "AP,,,,%s", battery_voltage);
 	/* Si no esta vacio hay que guardar su contenido en la memoria */
 	} else {
@@ -75,6 +74,8 @@ bool update_sd(void) {
 
 	}
 
+	/* Limpiamos el buffer para que no se procese de nuevo */
+	data_buffer[0] = '\0'; 
 	/* yyyy-mm-ddThh:mm:ssZ,id,tt.t,hh,v.mv,v.mv,v.mv - (46 + 1 '\0') */
 	sprintf(data_buffer, "%s,%s", rtc_date_time, store_to_sd);
 
@@ -421,24 +422,24 @@ void loop() {
 		/* Solo se actualizan los datos si hay un cambio significativo */
 		float new_battery_voltage = analogRead(BATT_PIN) * VOLT_MAX_REF / 1023;
 
-		//if (fabs(battery_voltage - new_battery_voltage) > 0.1) { // Umbral de 0.1V
-		//	battery_voltage = new_battery_voltage;
-			//update_sd();
-		//}
+		if (fabs(battery_voltage - new_battery_voltage) > 0.1) { // Umbral de 0.1V
+			battery_voltage = new_battery_voltage;
+			update_sd();
+		}
 
 		/* Debug */
 		Serial.print("Voltaje de bateria: ");
 		Serial.println(new_battery_voltage);
 
 		/* Actualizamos los datos en el servidor */
-		server_last_update_request();
+		//server_last_update_request();
 
 	}
 
 	/* Chequea la radio y actualiza en la SD si hay algo nuevo */
-  	//if (nrf_check(data_buffer)) {
-	//	update_sd();
-	//}
+  	if (nrf_check(data_buffer)) {
+		update_sd();
+	}
 
 	/* Verificamos si hay datos nuevos en la conexión Ethernet */
 	if (eth_check(data_buffer)) {
