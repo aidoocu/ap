@@ -116,8 +116,41 @@ void eth_response(char * send_buffer) {
 /* Intentar conectar al servidor */
 bool eth_request_connect(void) {
 
-	if (server.connect(server_ip, SERVER_PORT))
+	if(server.connected()) {
+		Serial.println("Ya conectado al servidor");
 		return true;
+	}
+
+	server.connect(server_ip, SERVER_PORT);
+
+	uint32_t start_conn_waiting_time = millis();
+
+	while (millis() - start_conn_waiting_time < REQUEST_TIMEOUT) {
+		if (server.connected()) {
+			Serial.println("Conectado al servidor");
+			return true;
+		}
+		delay(50); // Esperar un poco antes de volver a verificar
+		Serial.print(".");
+		/* !!!!!!!!!!!!!! PROBLEMA CUANDO NO SE ESTABLECE CONEXION !!!!!! no se liberan los recursos */
+		if(server.status() == UIP_CLOSED || server.status() == UIP_CLOSING) {
+			Serial.println("Conexión cerrada al servidor");
+			server.stop();
+			delay(100);
+			return false;
+		}
+	}
+
+	if(server.status() != UIP_CLOSED) {
+		Serial.println("No se pudo conectar al servidor");
+		Serial.print("Estado del servidor: ");
+		Serial.println(server.status());
+		server.stop();
+		delay(100);
+	} else {
+		Serial.println("Conexión cerrada al servidor");
+		
+	}
 	return false;
 }
 
