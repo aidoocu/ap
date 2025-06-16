@@ -152,6 +152,9 @@ bool eth_client_send(char * data_buffer/* , size_t length */) {
 
 	if(!eth_request_connect()) {
 		/* Si no se pudo conectar al servidor, no se puede hacer nada */
+		eth_disconnect();
+		delay(1000); // Esperar un poco para asegurar que la conexión se cierra correctamente
+		eth_update_cnx();
 		Serial.println("No se pudo conectar al servidor");
 		return false;
 	}
@@ -171,6 +174,7 @@ bool eth_client_send(char * data_buffer/* , size_t length */) {
 	/* 	Tanto si se ha superado el tiempo de espera y no se recibio respuesta del servidor
 	o de facto se recibio respuesta se cierra la conexión */
 	eth_disconnect();
+	delay(500); // Esperar un poco para asegurar que la conexión se cierra correctamente
 	/* La conexión se actualiza para limpiar todos los recursos utilizados */
 	eth_update_cnx();
 

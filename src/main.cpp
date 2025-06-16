@@ -171,15 +171,7 @@ void server_last_update_request(void){
 	/* 	El servidor debera responder con un payload de la forma: "yyyy-mm-ddThh:mm:ssZ" (formato ISO 8601 UTC) */
 	
 	data_buffer[0] = '\0'; // Limpiamos el buffer
-	sprintf(data_buffer,
-		"GET /api/device/03/last_measurement/ HTTP/1.1\r\n"
-		"Host: 10.1.111.249:8000\r\n"
-		"X-Client-Type: Senspire AP V1\r\n"
-		"X-Device-ID: SPAP-0001\r\n"
-		//"Accept: text/plain\r\n"
-		"X-Fields: timestamp\r\n"
-		"\r\n"
-	);
+	sprintf(data_buffer, GET_LAST_MEASUREMENT_HEADER);
 
 	if(!eth_client_send(data_buffer)) {
 		/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
@@ -209,22 +201,46 @@ void server_last_update_request(void){
 		return;
 	}
 
+	if(sd_is_last_timestamp_cached(timestamp)) {
+		/* Si no se encontró el timestamp en la SD, se guarda el timestamp y el offset */
+		Serial.println("Timestamp encontrado en cache, servidor actualizado");
+		return;
+	}
+
 	/* ---------------------------- Búsqueda en la SD del último timestamp ---------------------------- */
 
+	/* 	El buffer de datos se va a llenar con el encabezado y los datos del CSV 
+		para enviarlo al servidor */
+	char data_buffer_body[POST_CSV_BODY_LENGTH]; // Buffer para los datos del CSV
+
+	/* !!!!! ToDo 
+	
+		El mecaniasmo de cahe no esta bien implementado, y ahora mismo hace nada con el offset y el 
+		timestamp guardados y la memoria se lee buscando siempre la ocurrencia del timestamp.
+	
+	*/
 	/* Mecanismo para asociar un offset a la última fecha/hora despachada.
 	   La función sd_date_time_next_line_search ya implementa un sistema de caché 
 	   que guarda y recupera automáticamente el último timestamp y su offset correspondiente.
 	   De esta forma cuando se recibe una petición con el mismo timestamp, se recupera 
 	   directamente el offset sin necesidad de buscar en todo el archivo. */
-
+	size_t offset = 0;
 	/* Si el timestamp es válido, buscamos la línea en la SD que lo contiene */
-	size_t offset = sd_date_time_next_line_search(timestamp);
-	/* Si no se encontró un offset válido */
-	if (!offset) {
-		Serial.println("No se encontró el offset del timestamp en la SD");
-		return;
+	if(strcmp(timestamp, "0000-00-00T00:00:00Z") == 0) {
+		/* Si el timestamp es el inicial, no hay datos en el servidor por lo que se
+		enviará el CSV completo */
+		Serial.println("Timestamp inicial, se enviará el CSV completo");
+		/* Buscamos el offset del primer timestamp en la SD */
+		offset = sd_read_csv_row(0, data_buffer_body);
+		offset++; // Ajustamos para que sea el inicio de la primera fila
+	} else {
+		offset = sd_date_time_next_line_search(timestamp);
+		/* Si no se encontró un offset válido */
+		if (!offset) {
+			Serial.println("No se encontró el offset del timestamp en la SD");
+			return;
+		}
 	}
-	
 	/* Debug - Mostrar el offset encontrado */
 	Serial.print("Offset encontrado: ");
 	Serial.println(offset);
@@ -233,32 +249,20 @@ void server_last_update_request(void){
 	fila del archivo CSV que contiene los encabezados para que servidor pueda separar 
 	las columnas por variables */
 
-	/* primero volvemos a limpiar el data_buffer */
-	data_buffer[0] = '\0';
+	/* ---------------------------- Preparación del CSV para enviar ---------------------------- */
 
-	/* Agregamos los encabezados al buffer */
-	sprintf(data_buffer,
-	"POST /api/upload-csv/ HTTP/1.1\r\n"
-	"Host: 10.1.111.249:8000\r\n"
-	"X-Device-ID: SPAPV1-0001\r\n"
-	"\r\n"
-	);
-	
-	uint32_t data_buffer_pointer = strlen(data_buffer);
 	/* A partir de aqui vamos a ir llenando el buffer con los datos del CSV */
 
 	/* Leemos la primera fila del CSV, que contiene los encabezados */
-	uint8_t first_row_length = sd_read_csv_row(0, data_buffer + data_buffer_pointer);
+	uint8_t data_buffer_pointer = sd_read_csv_row(0, data_buffer_body);
 	/* Si no se pudo leer la primera fila, no hay nada que hacer */
-	if (!first_row_length) {
+	if (!data_buffer_pointer) {
 		Serial.println("No se pudo leer la primera fila del CSV");
 		return;
 	}
 
-	data_buffer_pointer += first_row_length; // Avanzamos el puntero del buffer
-
 	/* Cambiamos el '\0' por un salto de línea al final de la primera fila */
-	data_buffer[data_buffer_pointer] = '\n';
+	data_buffer_body[data_buffer_pointer] = '\n';
 	/* Aumentamos el largo del buffer leido */
 	data_buffer_pointer++;
 	/* Ponemos el cierre de cadena */
@@ -267,13 +271,23 @@ void server_last_update_request(void){
 		o sera sustituido por sd_read_csv_rows con el primer caracter de la proxima fila */
 
 	/* Leemos las filas desde el offset encontrado hasta llenar el buffer o fin de archivo */
-	if (!sd_read_csv_rows(offset, (data_buffer + data_buffer_pointer), (BUFFER_SIZE - data_buffer_pointer - 1))) {
+	if (!sd_read_csv_rows(offset, (data_buffer_body + data_buffer_pointer), (POST_CSV_BODY_LENGTH - data_buffer_pointer - 1))) {
 		Serial.println("No se pudo leer las filas del CSV");
 		return;
 	}
 
 	/* Debug */
-	Serial.println("Datos CSV leídos correctamente:\n");
+	//Serial.println("Datos CSV leídos correctamente:\n");
+	//Serial.println(data_buffer_body);
+
+	/* Ahora es que se crea el encabezado que debera contener el campo Content-Length */
+	data_buffer[0] = '\0';
+	/* Agregamos los encabezados al buffer */
+	sprintf(data_buffer, POST_CSV_HEADER, strlen(data_buffer_body)); // El Content-Length es el largo del buffer de datos leidos mas el encabezado
+	strcat(data_buffer, data_buffer_body); // Concatenamos el buffer de datos al encabezado
+
+	/* Debug */
+	Serial.println("Para el servidor:\n");
 	Serial.println(data_buffer);
 
 	/* ---------------------------- Envio de los updates ---------------------------- */
@@ -284,11 +298,55 @@ void server_last_update_request(void){
 		return;
 	}
 
-	/* .... */
-
 	/* Debug */
 	Serial.print("Respuesta del servidor: ");
 	Serial.println(data_buffer);
+
+	/* ---------------------------- Procesamiento de la respuesta del servidor ---------------------------- */
+	/** 	La respuesta del servidor debera ser un payload de la forma: 
+	 * 	"error: 0" si todo salio bien, o "error: <codigo_error>" si hubo un error 
+	 * 	Los codigos de error son:
+			0: Sin errores
+			1: xxx
+			2: xxx
+		"timestamp: yyyy-mm-ddThh:mm:ssZ" ultimo timestamp actualizado
+
+	*/
+	char errors[] = {"00"}; // Buffer para el campo de error
+	/* Si el campo no se encontró, o no es del largo correcto nada mas que hacer */
+	if (!get_payload_field("errors", errors)) {
+		Serial.println("Campo errors no encontrado o invalido");
+		return;
+	}
+	if( strcmp(errors, "0") != 0) {
+		/* Si el error no es 0, significa que hubo un error al enviar el CSV */
+		Serial.print("Error al enviar el CSV: ");
+		Serial.println(errors);
+		return;
+	}
+
+	/* ---------------------------- Actualización del timestamp ---------------------------- */
+	/* 	Una vez que se ha enviado el CSV, se actualiza el timestamp en la SD 
+		para que la proxima vez que se solicite no se vuelva a enviar el mismo 
+		timestamp y se pueda enviar el siguiente */
+		/* Si el campo no se encontró, o no es del largo correcto nada mas que hace */
+	if (get_payload_field("last_timestamp", timestamp) !=  DATE_TIME_BUFF - 1) {
+		Serial.println("Timestamp no encontrado o invalido");
+		return;
+	}
+
+	/* Debug */
+	Serial.print("Timestamp recibido del servidor: ");
+	Serial.println(timestamp);
+	/* Verificamos que el timestamp sea válido */
+	if (!validate_date_time(timestamp)) {
+		Serial.println("Formato de timestamp inválido");
+		return;
+	}
+
+	/* Buscamos y guardamos el timestamp y el offset en la SD */
+	//sd_date_time_next_line_search(timestamp);
+
 
 	/* Limpiamos el buffer de datos */
 	data_buffer[0] = '\0';

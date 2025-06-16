@@ -160,7 +160,7 @@ uint32_t sd_read_csv_rows(size_t offset, char * sd_buffer, uint16_t buffer_size)
 
 	/* Si no se leen bytes nada que hacer */
 	if(!bytes_read) {
-		Serial.print("no bytes readed");
+		Serial.println("no bytes readed");
 		return 0;
 	}
 
@@ -215,6 +215,9 @@ bool sd_is_last_timestamp_cached(char* timestamp) {
 
 	/* Verificamos si tenemos el timestamp cacheado en memoria */
 	if(last_timestamp[0] != '\0' && last_offset > 0) {
+		/* Debug */
+		Serial.print("Timestamp cacheado: ");
+		Serial.println(last_timestamp);
 		// Si el timestamp cacheado es igual al que estamos buscando, devolvemos el offset cacheado
 		if (strcmp(last_timestamp, timestamp) == 0) {
 			return true; // Hay un timestamp guardado y es el mismo que se busca

@@ -33,6 +33,10 @@
 //#define BATT_PIN A1
 #define VOLT_MAX_REF 24.28   		/* Para un divisor 1M/240K, teniendo en cuenta que ya el Wemos tiene un divisor 220 kΩ/100 kΩ */
 
+
+/* Global buffer, sera tan largo como lo que se va a transimitir por eth */
+#define BUFFER_SIZE 512
+
 /* Mensajes */
 #define ACK_OK_RESP         "ACK=200 pl="   //Recurso encontrado, a continuacion viene la respuesta
 #define ACK_OK_UPDATED      "ACK=201"       //Recurso actualizado, nada nuevo que enviar
@@ -45,8 +49,25 @@
 #define ACK_ERR_NO_RECORD   "ACK=406"       //Error al grabar en la SD
 #define ACK_BAD_DATETIME    "ACK=407"       //Error al grabar en la SD
 
-/* Global buffer, sera tan largo como lo que se va a transimitir por eth */
-#define BUFFER_SIZE 512
+#define POST_CSV_HEADER "POST /api/upload-csv/ HTTP/1.1\r\n" \
+                        "Host: 10.1.111.249:8000\r\n" \
+                        "X-Device-ID: SPAPV1-0001\r\n" \
+                        "Content-Length: %d\r\n" \
+                        "Content-Type: text/csv\r\n" \
+                        "\r\n"
+
+/** Reservamos espacio para el header, el valor de Content-Length y el cierre de cadena */
+#define POST_CSV_BODY_LENGTH (BUFFER_SIZE - sizeof(POST_CSV_HEADER) - 4)
+
+#define GET_LAST_MEASUREMENT_HEADER "GET /api/device/03/last_measurement/ HTTP/1.1\r\n" \
+                                    "Host: 10.1.111.249:8000\r\n" \
+                                    "X-Client-Type: Senspire AP V1\r\n" \
+                                    "X-Device-ID: SPAP-0001\r\n" \
+                                    "X-Fields: timestamp\r\n" \
+                                    "\r\n"
+
+
+
 /* largo del header OK_RESP */
 #define HEADER_OK_RESP_LENGTH (sizeof(ACK_OK_RESP) - 1) //Aqui el lee tambien el '\0' entonces -1
 /* Pedazo maximo de memoria que se puede leer desde la SD para no devordar el buffer */
@@ -59,5 +80,9 @@
 // La dirección 0 ya no se usa para timezone offset (eliminado)
 // Aquí puedes agregar más defines para otras configuraciones persistentes
 // #define EEPROM_ADDR_OTRA_CONFIG 4
+
+
+/* Largo del valor del campo error en la respuesta del servidor. Incluye el '\0' */
+#define FIELD_ERROR_VALUE_LENGTH 4
 
 #endif /* _AP_CONFIG_H_ */

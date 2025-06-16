@@ -69,6 +69,12 @@ void sd_save_last_timestamp_offset(const char* timestamp, size_t offset);
  * @param timestamp Buffer donde se copiará el último timestamp guardado
  * @return true si hay un timestamp guardado, false si no hay datos guardados
 */
-size_t sd_get_last_timestamp_offset(char * timestamp);
+//size_t sd_get_last_timestamp_offset(char * timestamp);
+
+/** Verifica si el último timestamp enviado al servidor está cacheado en memoria
+ * @param timestamp Cadena con el timestamp a verificar
+ * @return true si el timestamp está cacheado, false si no hay un timestamp guardado
+*/
+bool sd_is_last_timestamp_cached(char* timestamp);
 
 #endif /* _SD_CARD_H_ */

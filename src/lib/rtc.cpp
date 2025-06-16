@@ -56,6 +56,11 @@ bool set_date_time(char * date_time) {
 bool validate_date_time(const char* date_time) {
     
     // Solo acepta el formato yyyy-mm-ddThh:mm:ssZ
+
+    if (strcmp(date_time, "0000-00-00T00:00:00Z") == 0) {
+        return true; // Permitir el valor por defecto para evitar errores
+    } 
+
     int len = strlen(date_time);
     if (len != 20) return false;
     if (date_time[4] != '-' || date_time[7] != '-' || date_time[10] != 'T' || 
