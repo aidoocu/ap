@@ -167,7 +167,7 @@ uint32_t sd_read_csv_rows(size_t offset, char * sd_buffer, uint16_t buffer_size)
 	/* 	Si se lee menos que buffer_size - 1 significa que se leyó hasta el final del archivo
 		almacenar todo en el buffer como una cadena */
 	if (bytes_read < buffer_size - 1) {
-		Serial.print("Final del archivo alcanzado");
+		Serial.println("Final del archivo alcanzado");
 
 		/* Se cierra la cadena */
 		sd_buffer[bytes_read] = '\0';
