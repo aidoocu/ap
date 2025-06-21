@@ -78,7 +78,7 @@ bool update_sd(void) {
 	/* yyyy-mm-ddThh:mm:ssZ,id,tt.t,hh,v.mv,v.mv,v.mv - (46 + 1 '\0') */
 	sprintf(data_buffer, "%s,%s", rtc_date_time, store_to_sd);
 
-	Serial.print("record: ");
+	Serial.print("SD save: ");
 	Serial.println(data_buffer);
 	delay(20);
 
@@ -92,8 +92,6 @@ bool update_sd(void) {
 	wdt_reset();
 
 	/* Debug */
-	//uint32_t data_lenght_recorded = sd_record(data_buffer);
- 	//Serial.print(data_lenght_recorded);
 	Serial.print(" - ");
 	Serial.println(sd_file_size());
 	delay(10);
@@ -113,8 +111,8 @@ uint32_t get_payload_field(const char * field, char * value) {
 	char * field_ptr = strstr(data_buffer, field);
 	if (field_ptr == NULL) {
 		value[0] = '\0'; // Si no se encuentra el campo, se devuelve una cadena vacía
-		Serial.print("Campo no encontrado: ");
-		Serial.println(field);
+		//Serial.print("Campo no encontrado: ");
+		//Serial.println(field);
 		return 0;
 	}
 
@@ -122,7 +120,7 @@ uint32_t get_payload_field(const char * field, char * value) {
 	field_ptr = strchr(field_ptr, ':');
 	if (field_ptr == NULL) {
 		value[0] = '\0'; // Si no hay ':', se devuelve una cadena vacía
-		Serial.print("Formato inválido: ");
+		//Serial.print("Formato inválido: ");
 		return 0;
 	}
 
@@ -144,14 +142,6 @@ uint32_t get_payload_field(const char * field, char * value) {
 	
 	value[i] = '\0'; // Cerrar la cadena
 
-	/* Debug */
-/* 	Serial.print("Campo encontrado: ");
-	Serial.print(field);
-	Serial.print(" - Valor: ");
-	Serial.println(value);
-	Serial.print("Largo del valor: ");
-	Serial.println(i); */
-	
 	/* Retornamos el largo del valor extraido */
 	return i;
 }
@@ -166,7 +156,7 @@ void server_last_update_request(void){
 	/* ---------------------------- Solicitud de último update ---------------------------- */
 
 	/* Debug */
-	Serial.println("Iniciando actualizacion del servidor...");
+	Serial.println("Sever update");
 	/* 	Se envia un GET al servidor para que este responda con la fecha y hora de la ultima actualizacion */
 	/* 	El servidor debera responder con un payload de la forma: "yyyy-mm-ddThh:mm:ssZ" (formato ISO 8601 UTC) */
 	
@@ -181,7 +171,7 @@ void server_last_update_request(void){
 		/* Enviamos la solicitud al servidor */
 		if(!wifi_client_send(data_buffer)) {
 			/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
-			Serial.println("Fallo al enviar la solicitud de timestamp al servidor");
+			Serial.println("WiFi fail asking tms");
 			return;
 		}
 	} else {
@@ -192,7 +182,7 @@ void server_last_update_request(void){
 		/* Enviamos la solicitud al servidor */
 		if(!eth_client_send(data_buffer)) {
 			/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
-			Serial.println("Fallo al enviar la solicitud de timestamp al servidor");
+			Serial.println("Eth fail asking tms");
 			return;
 		}
 	}
@@ -200,13 +190,13 @@ void server_last_update_request(void){
 	char timestamp[DATE_TIME_BUFF];
 	/* Si el campo no se encontró, o no es del largo correcto nada mas que hace */
 	if (get_payload_field("timestamp", timestamp) != DATE_TIME_BUFF - 1) {
-		Serial.println("Timestamp no encontrado o invalido");
+		Serial.println("no tms");
 		return;
 	}
 
 	/* Verificamos que el timestamp sea válido */
 	if (!validate_date_time(timestamp)) {
-		Serial.println("Formato de timestamp inválido");
+		Serial.println("invalid tms");
 		return;
 	}
 
@@ -234,19 +224,19 @@ void server_last_update_request(void){
 	if(strcmp(timestamp, "0000-00-00T00:00:00Z") == 0) {
 		/* Si el timestamp es el inicial, no hay datos en el servidor por lo que se
 		enviará el CSV completo */
-		Serial.println("Timestamp inicial, se enviará el CSV completo");
+		Serial.println("tms 00");
 		/* Señalamos que se enviará el CSV desde el principio */
 		offset = 1;
 	} else {
 		offset = sd_date_time_next_line_search(timestamp);
 		/* Si no se encontró un offset válido */
 		if (!offset) {
-			Serial.println("No se encontró el offset del timestamp en la SD");
+			Serial.println("no tms-offset");
 			return;
 		}
 	}
 	/* Debug - Mostrar el offset encontrado */
-	Serial.print("Offset encontrado: ");
+	Serial.print("tms offset: ");
 	Serial.println(offset);
 	
 	/* Aqui vamos a preparar el csv de respuesta. Para ello vamos a tomar la primera
@@ -265,7 +255,7 @@ void server_last_update_request(void){
 
 		/* Si no se pudo leer la primera fila, no hay nada que hacer */
 		if (!data_buffer_pointer) {
-			Serial.println("No se pudo leer la primera fila del CSV");
+			Serial.println("first row fail");
 			return;
 		}
 
@@ -288,7 +278,7 @@ void server_last_update_request(void){
 		size_t bytes_readed_in_rows = sd_read_csv_rows(offset, data_buffer_body + data_buffer_pointer, POST_CSV_BODY_LENGTH - data_buffer_pointer);
 		offset += bytes_readed_in_rows;
 		if (!bytes_readed_in_rows) {
-			Serial.println("No se pudo leer las filas del CSV");
+			Serial.println("no rows readed");
 			return;
 		}
 
@@ -382,7 +372,7 @@ void setup(){
 
 	global_timer = millis() + 10000;
 
-	Serial.println("Setup done!");
+	//Serial.println("Setup done!");
 
 }
 
@@ -465,8 +455,8 @@ void loop() {
 
 				} else {
 					/* 	El offset es un numero entero positivo, por lo que se puede procesar */
-					Serial.print("i: ");
-					Serial.println(eth_offset);
+					//Serial.print("i: ");
+					//Serial.println(eth_offset);
 					//delay(20);
 
 					/* 	verificamos que sea consistente, asi que buscamos el tamanno del archivo 

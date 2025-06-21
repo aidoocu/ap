@@ -45,12 +45,12 @@ void eth_init(void){
 	Ethernet.begin(mac, local_ip);
 	
  	if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-		Serial.println(F("No Ethernet hardware found."));
+		Serial.println(F("no eth hdw"));
 	}
 	else if (Ethernet.linkStatus() == LinkOFF) {
-		Serial.println(F("Ethernet cable is not connected."));
+		Serial.println(F("no eth link")); //aqui pasa algo porque si hay link, pero da error ???
 	} else {
-		Serial.println(F("Ethernet hardware initialized successfully."));
+		Serial.println(F("eth init ok"));
 	}
 
 	tcp_server.begin();
@@ -64,11 +64,6 @@ void eth_update_cnx(void) {
 uint16_t eth_check(char * request){
 
 	client = tcp_server.available();
-/* 
- 	Serial.print("clt: ");
-	Serial.println(client);
-	Serial.println(client.available()); */
-
 
 	if(client) {
 		
@@ -95,7 +90,7 @@ uint16_t eth_check(char * request){
 
 		}
 
-		Serial.println("No hay nada que leer");
+		Serial.println("no bytes eth");
 		client.stop();
 
 	}
@@ -117,7 +112,7 @@ void eth_response(char * send_buffer) {
 bool eth_request_connect(void) {
 
 	if(server.connected()) {
-		Serial.println("Ya conectado al servidor");
+		//Serial.println("Ya conectado al servidor");
 		return true;
 	}
 
@@ -127,14 +122,14 @@ bool eth_request_connect(void) {
 
 	while (millis() - start_conn_waiting_time < REQUEST_TIMEOUT) {
 		if (server.connected()) {
-			Serial.println("Conectado al servidor");
+			//Serial.println("Conectado al servidor");
 			return true;
 		}
 		delay(50); // Esperar un poco antes de volver a verificar
 		Serial.print(".");
 		/* !!!!!!!!!!!!!! PROBLEMA CUANDO NO SE ESTABLECE CONEXION !!!!!! no se liberan los recursos */
 		if(server.status() == UIP_CLOSED || server.status() == UIP_CLOSING) {
-			Serial.println("conn eth status closed");
+			//Serial.println("conn eth status closed");
 			server.stop();
 			delay(100);
 			return false;
@@ -142,15 +137,15 @@ bool eth_request_connect(void) {
 	}
 
 	if(server.status() != UIP_CLOSED) {
-		Serial.println("No se pudo conectar al servidor");
-		Serial.print("Estado del servidor: ");
-		Serial.println(server.status());
+		//Serial.println("No se pudo conectar al servidor");
+		//Serial.print("Estado del servidor: ");
+		//Serial.println(server.status());
 		server.stop();
 		delay(100);
-	} else {
-		Serial.println("conn eth status closed");
+	} //else {
+		//Serial.println("conn eth status closed");
 		
-	}
+	//}
 	return false;
 }
 
@@ -188,7 +183,7 @@ bool eth_client_send(char * data_buffer/* , size_t length */) {
 		eth_disconnect();
 		delay(1000); // Esperar un poco para asegurar que la conexión se cierra correctamente
 		eth_update_cnx();
-		Serial.println("No se pudo conectar al servidor");
+		//Serial.println("No se pudo conectar al servidor");
 		return false;
 	}
 
@@ -220,7 +215,7 @@ bool eth_client_send(char * data_buffer/* , size_t length */) {
 
 	/* Si no se recibio respuesta del servidor en el tiempo esperado, nada que hacer */
 	if(data_buffer[0] == '\0') {
-		Serial.println("No se recibio respuesta del servidor");
+		Serial.println("no eth response");
 		return false;
 	}
 

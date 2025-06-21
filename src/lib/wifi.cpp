@@ -79,9 +79,9 @@ bool wifi_init() {
     while (millis() < wifi_timeout) {
 
         if (wifi_is_connected()) {
-            Serial.println("Conexión WiFi exitosa");
-            Serial.print("IP: ");
-            Serial.println(WiFi.localIP());
+            //Serial.println("Conexión WiFi exitosa");
+            //Serial.print("IP: ");
+            //Serial.println(WiFi.localIP());
             return true; // Connection successful
         }
 
@@ -92,7 +92,7 @@ bool wifi_init() {
         Serial.print(".");
     }
     
-    Serial.println("\n>>> Timeout de conexión WiFi alcanzado!");
+    Serial.println("\n WiFi conn timeout");
     return false; // Connection failed
 
 }
@@ -103,11 +103,11 @@ bool wifi_client_send(char * data_buffer) {
 
     // Asegurar que la conexión WiFi esté activa
     if (!wifi_is_connected()) {
-        Serial.println("Reconecting to WiFi...");
+        Serial.println("WiFi reconecting...");
 
         /* Reintento de conectarse a la WiFi */
         if (!wifi_init()) {
-            Serial.println("Failed to connect to WiFi");
+            Serial.println("Failed");
             return false;
         }  
     }
@@ -117,7 +117,7 @@ bool wifi_client_send(char * data_buffer) {
     
     // Conectar al servidor HTTPS
     if (!client.connect(HTTPS_RENDER_HOST, HTTPS_PORT)) {
-        Serial.println("Conexión https fallida");
+        Serial.println("https failed");
         return false;
     }
             
@@ -132,7 +132,7 @@ bool wifi_client_send(char * data_buffer) {
     uint32_t wifi_timeout = millis() + WIFI_CONN_TIMEOUT; 
     while (client.connected() && !client.available()) {
         if (wifi_timeout < millis()) {
-            Serial.println(">>> Timeout del servidor!");
+            Serial.println("https timeout");
             client.stop();
             return false;
         }
@@ -148,7 +148,7 @@ bool wifi_client_send(char * data_buffer) {
     client.stop();
 
     /* Debug */
-    Serial.println("Respuesta del servidor:");
+    Serial.println("https anws:");
     if(!server_response)
         Serial.println("No hay :( ");
     else

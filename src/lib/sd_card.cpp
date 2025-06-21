@@ -70,15 +70,7 @@ uint32_t sd_read(uint8_t * sd_buffer, size_t buff_size, uint32_t offset, uint32_
 		/** Leer un bloque hasta el tamanno del buffer o en su defecto
 			 hasta que se acabe el archivo. */
 		size_t bytes_read = min((buff_size), (sd_file_size - offset));
-		
-/*  		Serial.print("ofst: ");
-		Serial.println(offset);
-		Serial.print("f-ofst: ");
-		Serial.println(sd_file_size - offset);		
-		Serial.print("trd: ");
-		Serial.println(bytes_read);
-		delay(20); */
-
+	
 		bytes_read = sd_file.read(sd_buffer, bytes_read);
 		sd_file.close();
 		return (bytes_read);
@@ -126,7 +118,7 @@ uint32_t sd_read_csv_row(size_t offset, char * sd_buffer){
 	sd_file.close();
 
 	/* Debug */
-	Serial.print("Fila leída: ");
+	Serial.print("row: ");
 	Serial.println(sd_buffer);
 
 	return len;
@@ -167,7 +159,7 @@ uint32_t sd_read_csv_rows(size_t offset, char * sd_buffer, uint16_t buffer_size)
 	/* 	Si se lee menos que buffer_size - 1 significa que se leyó hasta el final del archivo
 		almacenar todo en el buffer como una cadena */
 	if (bytes_read < buffer_size - 1) {
-		Serial.println("Final del archivo alcanzado");
+		Serial.println("EOF");
 
 		/* Se cierra la cadena */
 		sd_buffer[bytes_read] = '\0';
@@ -205,10 +197,10 @@ void sd_save_last_timestamp_offset(const char* timestamp, size_t offset) {
     last_offset = offset;
     
     // Debug
-    Serial.print("Guardado en memoria timestamp: ");
+/*     Serial.print("Guardado en memoria timestamp: ");
     Serial.print(last_timestamp);
     Serial.print(" con offset next line: ");
-    Serial.println(last_offset);
+    Serial.println(last_offset); */
 }
 
 bool sd_is_last_timestamp_cached(char* timestamp) {
@@ -240,7 +232,7 @@ size_t sd_date_time_next_line_search(char * date_time){
 	/* Verificamos si tenemos el timestamp cacheado en memoria */
 	if (sd_is_last_timestamp_cached(date_time)) {
 		// Si el timestamp cacheado es igual al que estamos buscando, devolvemos el offset cacheado
-		Serial.print("Timestamp cacheado encontrado con offset: ");
+		Serial.print("tms offset: ");
 		Serial.println(last_offset);
 		return last_offset; // Retorna el offset cacheado
 	}
@@ -283,7 +275,7 @@ size_t sd_date_time_next_line_search(char * date_time){
 	}
 
 	/* Debug */
-	Serial.println("No se encontro la fecha y hora en el archivo de la SD");
+	//Serial.println("No se encontro la fecha y hora en el archivo de la SD");
 	
 	return 0; // No se encontro la fecha y hora
 }
