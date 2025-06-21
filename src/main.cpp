@@ -16,7 +16,7 @@ static char data_buffer[BUFFER_SIZE];
 static char * payload_progress;		//Valorar si es necesario que sea char o se puede poner uint8_t
 static unsigned long global_timer;
 
-                    	/* 10 min */ /* 5 seg */
+                    	/* 5 seg */ /* 10 min */ 
 #define GLOBAL_PERIOD   /* 5000 */  600000
 
 static uint32_t eth_offset = 0;
