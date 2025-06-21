@@ -23,6 +23,8 @@ static uint32_t eth_offset = 0;
 
 /* Variable para guardar el voltaje de la bateria */
 static float battery_voltage = 0.0;
+/* Contador para forzar la actualización cada 5 ciclos */
+static uint8_t battery_update_counter = 0;
 
 /* Esta funcion verifica si fuera necesario la integridad del offset y lo convierte en entero */
 uint32_t str_to_int(char * str_offset) {
@@ -401,15 +403,21 @@ void loop() {
 		procese update_sd(); */
 		data_buffer[0] = '\0';
 
-		/* Solo se actualizan los datos si hay un cambio significativo */
+		/* Solo se actualizan los datos si hay un cambio significativo o cada 5 ciclos */
 		float new_battery_voltage = analogRead(BATT_PIN) * VOLT_MAX_REF / 1023;
+		
+		/* Incrementar el contador en cada ciclo */
+		battery_update_counter++;
 
-		if (fabs(battery_voltage - new_battery_voltage) > 0.1) { // Umbral de 0.1V
+		/* Actualizar si hay cambio significativo o si han pasado 5 ciclos */
+		if (fabs(battery_voltage - new_battery_voltage) > 0.1 || battery_update_counter >= 5) { 
 			battery_voltage = new_battery_voltage;
+			/* Reiniciar el contador después de una actualización */
+			battery_update_counter = 0;
 			update_sd();
 		}
 
-		/* Actualizamos los datos en el servidor */
+		/* verificamos si hay algo que hay actualizar en el servidor y se actualiza de ser el caso */
 		server_last_update_request();
 
 	}
