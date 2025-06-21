@@ -37,51 +37,6 @@ en uipethernet-conf.h */
 #define ACK_ERR_NO_RECORD   "ACK=406"       //Error al grabar en la SD
 #define ACK_BAD_DATETIME    "ACK=407"       //Error al grabar en la SD
 
-/* Headers para http */
-#define HTTP_HOST           "Host: 10.1.111.249:8000\r\n"
-#define HTTP_RESOURCE       "/api/update_data/ HTTP/1.1\r\n"
-#define HTTP_DEVICE_ID      "X-Device-ID: SPAPV1-0001\r\n"
-#define HTTP_FIELDS_DT      "X-Fields: timestamp\r\n"
-#define HTTP_C_TYPE_TEXT    "Content-Type: text/csv\r\n"
-#define HTTP_C_TYPE_JSON    "Content-Type: application/json\r\n"
-#define HTTP_C_LENGTH       "Content-Length: %d\r\n"
-#define HTTP_HEADER_END     "\r\n"
-
-
-#define HTTP_POST_CSV   "POST "HTTP_RESOURCE  \
-                        HTTP_HOST \
-                        HTTP_DEVICE_ID \
-                        HTTP_C_LENGTH \
-                        HTTP_C_TYPE_TEXT \
-                        HTTP_HEADER_END
-
-#define HTTP_GET_LAST   "GET "HTTP_RESOURCE  \
-                        HTTP_HOST \
-                        HTTP_DEVICE_ID \
-                        HTTP_FIELDS_DT \
-                        HTTP_HEADER_END
-
-
-
-
-
-
-#define POST_CSV_HEADER "POST /api/upload-csv/ HTTP/1.1\r\n" \
-                        "Host: 10.1.111.249:8000\r\n" \
-                        "X-Device-ID: SPAPV1-0001\r\n" \
-                        "Content-Length: %d\r\n" \
-                        "Content-Type: text/csv\r\n" \
-                        "\r\n"
-
-/** Reservamos espacio para el header, el valor de Content-Length y el cierre de cadena */
-#define POST_CSV_BODY_LENGTH (BUFFER_SIZE - sizeof(POST_CSV_HEADER) - 4)
-
-#define GET_LAST_MEASUREMENT_HEADER "GET /api/device/03/last_measurement/ HTTP/1.1\r\n" \
-                                    "Host: 10.1.111.249:8000\r\n" \
-                                    "X-Client-Type: Senspire AP V1\r\n" \
-                                    "X-Device-ID: SPAP-0001\r\n" \
-                                    "X-Fields: timestamp\r\n" \
-                                    "\r\n"
 
 
 void eth_init(void);

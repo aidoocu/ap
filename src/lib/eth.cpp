@@ -134,7 +134,7 @@ bool eth_request_connect(void) {
 		Serial.print(".");
 		/* !!!!!!!!!!!!!! PROBLEMA CUANDO NO SE ESTABLECE CONEXION !!!!!! no se liberan los recursos */
 		if(server.status() == UIP_CLOSED || server.status() == UIP_CLOSING) {
-			Serial.println("Conexión cerrada al servidor");
+			Serial.println("conn eth status closed");
 			server.stop();
 			delay(100);
 			return false;
@@ -148,7 +148,7 @@ bool eth_request_connect(void) {
 		server.stop();
 		delay(100);
 	} else {
-		Serial.println("Conexión cerrada al servidor");
+		Serial.println("conn eth status closed");
 		
 	}
 	return false;
@@ -192,7 +192,11 @@ bool eth_client_send(char * data_buffer/* , size_t length */) {
 		return false;
 	}
 
-	/* Se envia el comando GET */
+	/* Debug */
+	Serial.println("Eth: ");
+	Serial.println(data_buffer);
+
+	/* Se envia el request que ya estaria conformado */
 	eth_send(data_buffer, strlen(data_buffer));
 
 	data_buffer[0] = '\0'; // Limpiamos el buffer
@@ -202,6 +206,9 @@ bool eth_client_send(char * data_buffer/* , size_t length */) {
 		if (eth_server_income(data_buffer)) {
 			break;
 		}
+		delay(500); // Esperar un poco antes de volver a verificar
+		Serial.print(".");
+		wdt_reset(); // Resetear el WDT para evitar que se reinicie el micro
 	}
 
 	/* 	Tanto si se ha superado el tiempo de espera y no se recibio respuesta del servidor

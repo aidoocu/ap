@@ -169,18 +169,31 @@ void server_last_update_request(void){
 	/* 	El servidor debera responder con un payload de la forma: "yyyy-mm-ddThh:mm:ssZ" (formato ISO 8601 UTC) */
 	
 	data_buffer[0] = '\0'; // Limpiamos el buffer
-	sprintf(data_buffer, GET_LAST_MEASUREMENT_HEADER);
 
-	if(!eth_client_send(data_buffer)) {
-		/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
-		Serial.println("Fallo al enviar la solicitud de timestamp al servidor");
-		return;
+	/* Si estamos conectados a la WiFi y esta activa, usamos el cliente de WiFi   */
+	if(wifi_is_connected()) {
+
+		/* Se ensambla el request */
+		sprintf(data_buffer, GET_LAST_MEASUREMENT_HEADER, HTTPS_RENDER_HOST);
+		
+		/* Enviamos la solicitud al servidor */
+		if(!wifi_client_send(data_buffer)) {
+			/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
+			Serial.println("Fallo al enviar la solicitud de timestamp al servidor");
+			return;
+		}
+	} else {
+
+		/* Si no estamos conectados a la WiFi, usamos el cliente Ethernet */
+		sprintf(data_buffer, GET_LAST_MEASUREMENT_HEADER, HTTP_LOCAL_HOST);
+
+		/* Enviamos la solicitud al servidor */
+		if(!eth_client_send(data_buffer)) {
+			/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
+			Serial.println("Fallo al enviar la solicitud de timestamp al servidor");
+			return;
+		}
 	}
-
-	/* Debug */
-	Serial.print("Respuesta del servidor: ");
-	Serial.println(data_buffer);
-	Serial.println("...");
 
 	char timestamp[DATE_TIME_BUFF];
 	/* Si el campo no se encontró, o no es del largo correcto nada mas que hace */
@@ -282,25 +295,35 @@ void server_last_update_request(void){
 
 		/* Ahora es que se crea el encabezado que debera contener el campo Content-Length */
 		data_buffer[0] = '\0';
-		/* Agregamos los encabezados al buffer */
-		sprintf(data_buffer, POST_CSV_HEADER, strlen(data_buffer_body)); // El Content-Length es el largo del buffer de datos leidos mas el encabezado
-		strcat(data_buffer, data_buffer_body); // Concatenamos el buffer de datos al encabezado
 
-		/* Debug */
-		Serial.println("Para el servidor:\n");
-		Serial.println(data_buffer);
 
-		/* ---------------------------- Envio de los updates ---------------------------- */
 
-		if(!eth_client_send(data_buffer)) {
-			/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
-			Serial.println("Fallo al enviar la solicitud de update al servidor");
-			return;
+		/* Si estamos conectados a la WiFi y esta activa, usamos el cliente de WiFi   */
+		if(wifi_is_connected()) {
+
+			/* Se ensambla el request */
+			sprintf(data_buffer, POST_CSV_HEADER, HTTPS_RENDER_HOST, strlen(data_buffer_body));
+			strcat(data_buffer, data_buffer_body); // Concatenamos el buffer de datos al encabezado
+			
+			/* Enviamos la solicitud al servidor */
+			if(!wifi_client_send(data_buffer)) {
+				/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
+				Serial.println("Update fail WiFi");
+				return;
+			}
+		} else {
+
+			/* Si no estamos conectados a la WiFi, usamos el cliente Ethernet */
+			sprintf(data_buffer, POST_CSV_HEADER, HTTP_LOCAL_HOST, strlen(data_buffer_body));
+			strcat(data_buffer, data_buffer_body); // Concatenamos el buffer de datos al encabezado
+
+			/* Enviamos la solicitud al servidor */
+			if(!eth_client_send(data_buffer)) {
+				/* Si no se pudo enviar la solicitud al servidor, no hay nada que hacer */
+				Serial.println("Update fail Eth");
+				return;
+			}
 		}
-
-		/* Debug */
-		Serial.print("Respuesta del servidor: ");
-		Serial.println(data_buffer);
 
 	}
 
@@ -332,13 +355,16 @@ void setup(){
 	/* Radio init */
 	nrf_init();
 
+	/* Inicializamos la WiFi */
+	wifi_init();
+
 	/* Referecia del ADC a 1.1V */
 	#ifdef __AVR_ATmega328P__
 	analogReference(INTERNAL);
 	#endif
 
 	/* habilitando el WDT */
-	wdt_enable(WDTO_2S);
+	wdt_enable(WDTO_8S);
 
 	/* parpadeo de LED as "hello"*/
 	pinMode(LED_BUILTIN, OUTPUT);

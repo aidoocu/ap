@@ -11,7 +11,9 @@
 #include "rtc.h"
 #include "sd_card.h"
 #include "eth.h"
+#include "wifi.h"
 
+#include "web_request.h"
 
 /* Tamano de los datos a guardar en cada  linea */
 /* yyyy-mm-ddThh:mm:ssZ */
@@ -35,7 +37,7 @@
 
 
 /* Global buffer, sera tan largo como lo que se va a transimitir por eth */
-#define BUFFER_SIZE 512
+#define BUFFER_SIZE 2048  // 2KB
 
 
 /* largo del header OK_RESP */
@@ -44,7 +46,7 @@
 #define MAX_SD_READ_CHUNK BUFFER_SIZE - HEADER_OK_RESP_LENGTH - 1 //hay que dejar un caracter para el cierre de cadena
 
 /* Timeout para esperar la respuesta del servidor */
-#define REQUEST_TIMEOUT 5000 //5 segundos
+#define REQUEST_TIMEOUT 15000 //5 segundos
 
 // Direcciones EEPROM para configuraciones persistentes
 // La dirección 0 ya no se usa para timezone offset (eliminado)
